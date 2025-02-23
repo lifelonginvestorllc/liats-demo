@@ -141,18 +141,18 @@ fi
 - Create a new project (New Algorithm)
 - Rename the project to liats (lowercase)
 
-### Create a new account LifelongRollover
+### Create a new account LifelongHedge
 
-- Copy live/LifelongPaper to live/LifelongRollover
+- Copy live/LifelongPaper to live/LifelongHedge
 
 ```
-% cp -r live/LifelongPaper live/LifelongRollover
+% cp -r live/LifelongPaper live/LifelongHedge
 ```
 
 - Update main.py accordingly
 
 ```
-setAlgoName("LifelongRollover")
+setAlgoName("LifelongHedge")
 addNotifySetting(LINotifyType.TELEGRAM, "-913280749")  # LIATS Test
 addAlertSetting(LINotifyType.EMAIL, "lifelonginvestorllc@gmail.com")
 Set trading strategies as well....
@@ -163,7 +163,7 @@ Set trading strategies as well....
 **Use single quote to support special characters!**
 
 ```
-% vi secret/LifelongRollover.key
+% vi secret/LifelongHedge.key
 ACCOUNT_ID=Uxxxxxxxx
 USERNAME=xxxxxx
 PASSWORD='******'
@@ -173,18 +173,18 @@ PASSWORD='******'
 
 ### Deploy for Live Trading
 
-- Adjust settings live/LifelongRollover/main.py whenever needed
+- Adjust settings live/LifelongHedge/main.py whenever needed
 
-- Run deployment script as `deploy LifelongRollover`
-- Run recreate script as `recreate LifelongRollover`
-- Run stop script as `stop LifelongRollover`
+- Run deployment script as `deploy LifelongHedge`
+- Run recreate script as `recreate LifelongHedge`
+- Run stop script as `stop LifelongHedge`
 
 - Check the status of a cloud project
 
 ```
-% lean cloud status LifelongRollover
+% lean cloud status LifelongHedge
 Project id: 12345678
-Project name: LifelongRollover
+Project name: LifelongHedge
 Project url: https://www.quantconnect.com/project/12345678
 Live status: Running
 Live id: L-e2970930d923e89a61a3f30c0512dade
