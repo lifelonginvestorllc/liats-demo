@@ -57,6 +57,8 @@
 
 ### Integrate with GitHub
 
+#### Solution 1: Start from scratch if not project created yet
+
 - You can create a project on QuantConnect or local as below
 
 ```
@@ -81,12 +83,25 @@
 % git checkout develop
 ```
 
-- Add bin path to the system PATH
+#### Solution 2: Just check out git repo if project existed
+
+- Clone liats repo to the lean dir
+
+```
+% cd ~/lean
+% git clone git@github.com:codebycase/liats.git
+```
+
+- Copy secret keys over to dir `~/lean/secret/`
+
+#### Additional settings
+
+- Append bin path to the system PATH
 
 ```
 # MacOS
 % vi ~/.zshrc
-export PATH="/opt/homebrew/opt/openjdk@17/bin:$PATH:$HOME/lean/liats/bin"
+export PATH="$PATH:/opt/homebrew/opt/openjdk@17/bin:$HOME/lean/liats/bin"
 ```
 
 ```
