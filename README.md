@@ -1,4 +1,5 @@
 # LIATS (Lifelong Investor Algorithmic Trading System)
+- **The backbone of our [Staircase Project Private Fund](docs/staircase/staircase-project-private-fund.md)** 
 
 ## Project Structure
 
