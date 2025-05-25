@@ -324,6 +324,7 @@ class LIGridBase(LITrading):
         self.gridStartPrices = {}
         self.gridOpenFromPrices = {}
         self.gridBoundaryPrices = {}  # Tracking min/max reached prices
+        self.gridLiquidatePrices = {}  # NOT exceed this red/bottom line!
         self.lastTradingMarketPrice = None  # Avoid using the same market price
 
         self.startLot: LIGridTradingLot = None  # The reference/starting lot with #0
@@ -337,6 +338,7 @@ class LIGridBase(LITrading):
         self.overallMaxProfitLoss = (0.0, 0.0)  # Tracking overall max/min profit/loss across multiple sessions
 
         self.closedTradesCount = 0
+        self.liquidatedAtPrice = 0.0
         self.realizedProfitLoss = 0.0
         self.pauseTradingTillTime = None
 
@@ -534,8 +536,10 @@ class LIGridBase(LITrading):
         self.gridMetadata[LIMetadataKey.startPrices] = self.gridStartPrices
         # self.gridMetadata[LIMetadataKey.boundaryPrices] = self.gridBoundaryPrices # Not available yet!
         self.gridMetadata[LIMetadataKey.investedQuantity] = self.getInvestedQuantity()
+        self.gridMetadata[LIMetadataKey.liquidatedAtPrice] = self.liquidatedAtPrice
         self.gridMetadata[LIMetadataKey.closedTradesCount] = self.closedTradesCount
         self.gridMetadata[LIMetadataKey.realizedProfitLoss] = self.realizedProfitLoss
+        self.gridMetadata[LIMetadataKey.rolloverProfitLoss] = self.rolloverProfitLoss
         self.overallMaxProfitLoss = (max(self.overallMaxProfitLoss[0], self.getMaxProfitLossAmount()),
                                      min(self.overallMaxProfitLoss[1], self.getMaxProfitLossAmount()))
         self.gridMetadata[LIMetadataKey.overallMaxProfitLoss] = self.overallMaxProfitLoss
@@ -571,8 +575,10 @@ class LIGridBase(LITrading):
             self.sessionId = self.gridMetadata.get(LIMetadataKey.sessionId, 1)
         self.gridStartPrices = self.gridMetadata.get(LIMetadataKey.startPrices, {})
         # self.gridBoundaryPrices = self.gridMetadata.get(LIMetadataKey.boundaryPrices, {}) # Not available yet!
+        self.liquidatedAtPrice = self.gridMetadata.get(LIMetadataKey.liquidatedAtPrice, 0.0)
         self.closedTradesCount = self.gridMetadata.get(LIMetadataKey.closedTradesCount, 0)
         self.realizedProfitLoss = self.gridMetadata.get(LIMetadataKey.realizedProfitLoss, 0.0)
+        self.rolloverProfitLoss = self.gridMetadata.get(LIMetadataKey.rolloverProfitLoss, 0.0)
         self.overallMaxProfitLoss = self.gridMetadata.get(LIMetadataKey.overallMaxProfitLoss, (0.0, 0.0))
         if self.isBuyAndHoldMode():
             self.dcaMaxStartPrice = self.gridMetadata.get(LIMetadataKey.dcaMaxStartPrice, 0)

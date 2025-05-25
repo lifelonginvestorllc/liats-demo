@@ -1,0 +1,69 @@
+#!/bin/bash
+
+if [ -z "$1" ]; then
+  echo "Please specify the account name! e.g. liats, CongTest, LifelongPaper"
+  exit 1
+fi
+
+ACCOUNT=$1
+# Remove the last slash /
+if [[ $ACCOUNT == */ ]]; then
+  ACCOUNT=${ACCOUNT////}
+  # ACCOUNT=$(echo "$ACCOUNT" | sed 's/.$//')
+fi
+
+echo "Backtesting ${ACCOUNT}..."
+
+MAIN_CODE=main.py
+CONFIG_FILE=config.json
+DEFAULT_ACCOUNT="liats"
+QC_USER=llc # Use llc for backtest by default
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+
+if [[ ${ACCOUNT} == "${DEFAULT_ACCOUNT}" ]]; then
+  # Login QuantConnect user if required
+  if [ -n "${QC_USER}" ]; then
+    source "${SCRIPT_DIR}"/login "${QC_USER}"
+  fi
+  # Run backtest on project
+  lean cloud backtest "${ACCOUNT}" --push
+  exit 0
+fi
+
+LIVE_DIR=$(dirname "${SCRIPT_DIR}")/live
+PROJECT_DIR=$(dirname "${LIVE_DIR}")
+ACCOUNT_CONFIG="${LIVE_DIR}"/${ACCOUNT}
+ACCOUNT_PROJECT="$(dirname "${PROJECT_DIR}")"/${ACCOUNT}
+
+if [ ! -d "${ACCOUNT_CONFIG}" ]; then
+  echo "Directory ${ACCOUNT_CONFIG} DOES NOT exists!"
+  exit 2
+fi
+
+# Load account credentials/keys
+# shellcheck disable=SC1090
+source ~/lean/secret/"${ACCOUNT}".key
+
+# Login QuantConnect user if required
+if [ -n "${QC_USER}" ]; then
+  source "${SCRIPT_DIR}"/login "${QC_USER}"
+fi
+
+# Go back to lean home dir
+cd "${PROJECT_DIR}"/.. || exit
+
+# Sync to live project dir
+rsync -a --delete "${PROJECT_DIR}"/ "${ACCOUNT_PROJECT}"/
+
+# Copy over main/config files
+cp "${ACCOUNT_CONFIG}"/${MAIN_CODE} "${ACCOUNT_PROJECT}"/${MAIN_CODE}
+cp "${ACCOUNT_CONFIG}"/${CONFIG_FILE} "${ACCOUNT_PROJECT}"/${CONFIG_FILE}
+
+# Run backtest on project
+lean cloud backtest "${ACCOUNT}" --push
+
+# Login back to llc
+if [[ ${QC_USER} != "llc" ]]; then
+  source "${SCRIPT_DIR}"/login llc
+fi

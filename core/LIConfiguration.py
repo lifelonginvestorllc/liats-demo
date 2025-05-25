@@ -97,6 +97,7 @@ class LIDefault:
     liquidateOnTakeProfitPercent = None
     liquidateByTrailingProfitPercent = None
     liquidateAtMarketClosingTime = 0  # 0(False), 1(True), 2(Only on Gain), 3(Only on Loss)
+    liquidateLossAndPauseTrading = False
     liquidateLossAndRestartTrading = False
     liquidateProfitAndRestartTrading = True
     limitOrderJitterTicks = 3
@@ -242,14 +243,15 @@ class LIConfigKey:
     stopTradingOnInvalidOrders = "stopTradingOnInvalidOrders"  # Stop trading after reached/exceeded the max number of invalid orders
     canTradeAtMarketClosingTime = "canTradeAtMarketClosingTime"  # Indicate whether allow to trade at market closing time
     liquidateAndStopTrading = "liquidateAndStopTrading"  # Liquidate this invested security and pause/stop trading for now, wait for next redeploy!
+    liquidateLossAndPauseTrading = "liquidateLossAndPauseTrading"  # Liquidate loss and pause the trading session until market revert back to exceed stopped loss price!
     liquidateLossAndRestartTrading = "liquidateLossAndRestartTrading"  # Liquidate loss and restart the trading session with fresh settings!
     liquidateProfitAndRestartTrading = "liquidateProfitAndRestartTrading"  # Liquidate profit and restart the trading session with fresh settings!
     liquidateRemovedSecurity = "liquidateRemovedSecurity"  # Liquidate the removed security automatically in position manager by default!
     liquidateOnMarginCall = "liquidateOnMarginCall"  # Liquidate this security's all positions and quit algorithm upon receiving the first margin call! Need to study current market situation and decide next step.
     liquidateOnFridayClose = "liquidateOnFridayClose"  # Liquidate managed/invested securities at the end of Friday's market time.
-    liquidateOnReachedPrices = "liquidateOnReachedPrices"  # Liquidate if current session's reference prices reached this prices, and then restart or redeploy!
-    liquidateOnStopLossAmount = "liquidateOnStopLossAmount"  # Liquidate if current session's combined loss reached this amount! (e.g. 10_000)
-    liquidateOnStopLossPercent = "liquidateOnStopLossPercent"  # Liquidate if current session's combined loss reached this percent! (e.g. 10=10%)
+    liquidateOnReachedPrices = "liquidateOnReachedPrices"  # Liquidate if current session's either side's reference price reached specified price, and then restart or redeploy!
+    liquidateOnStopLossAmount = "liquidateOnStopLossAmount"  # Liquidate if current session's combined loss reached this amount! (e.g. 10_000), and then restart or redeploy!
+    liquidateOnStopLossPercent = "liquidateOnStopLossPercent"  # Liquidate if current session's combined loss reached this percent! (e.g. 10=10%) and the restart or redeploy!
     liquidateOnTakeProfitAmount = "liquidateOnTakeProfitAmount"  # Liquidate if current session's combined profit reached this amount, and then restart or redeploy! (e.g. 10_000=$10,000)
     liquidateOnTakeProfitAmounts = "liquidateOnTakeProfitAmounts"  # Liquidate if current session's combined profit reached this side's amount, and then restart or redeploy! (e.g. {LIGridSide.BTU:1_000, LIGridSide.STD: 2_000}})
     liquidateOnTakeProfitPercent = "liquidateOnTakeProfitPercent"  # Liquidate if current session's combined profit reached this percent, and then restart or redeploy! (e.g. 10=10%)
@@ -296,7 +298,7 @@ class LIConfigKey:
     gridBandingOpenFromPrices = "gridBandingOpenFromPrices"  # Start opening lot's positions from the dynamic prices, so that we can wait patiently for market to reach a certain price before long or short.
     gridBandingFixedStartBand = "gridBandingFixedStartBand"  # Have the fixed (relatively) start prices to follow a specified bollinger band. Otherwise, will apply self-driven dynamic band tiers according to market trend.
     gridResetLotsMetadata = "gridResetLotsMetadata"  # Simply remove <Prefix>/gridLotsMetadata (could be skewed) in order to start over with current session and reset filled open prices and positions.
-    gridRolloverCriteria = "gridRolloverCriteria"  # Algo could fail to figure out the rollover criteria, It's to specify contract, how many grid lots and invested quantity to rollover. (e.g. (MNQ21H25, 3, 3 * 2))
+    gridRolloverCriteria = "gridRolloverCriteria"  # Algo could fail to figure out the rollover criteria, It's to specify contract, how many grid lots, invested quantity, profit loss to rollover. (e.g. (MNQ21H25, 3, 3 * 2, -10000))
     gridInitializeSession = "gridInitializeSession"  # Need to deploy twice for live mode! first to initialize a new session, liquidate open positions, delete metadata and reset all grid lots, then remove it and redeploy to continue!
     gridLotMinQuantity = "gridLotMinQuantity"  # This is required for LIInvestAmount(maxHolding=?) so that we can avoid submitting small size of orders!
     gridLotLevelAmount = "gridLotLevelAmount"  # Calculate Arithmetic open price for each grid lot
@@ -315,7 +317,7 @@ class LIConfigKey:
     gridFollowAdverseTrend = "gridFollowAdverseTrend"  # Once the grid is fully filled with all long/short lots, allow to push/force the start prices to further down/up, therefore sell some losing positions in order to catch up with the even unfavorable/adverse trending!
     gridStickToMarketTrend = "gridStickToMarketTrend"  # Have grid trading lots stick to or align with current market price, always follow the market trend closely in favor of more orders to be filled/executed.
     gridInitOpenedLots = "gridInitOpenedLots"  # Adjust start prices dynamically to initiate certain long(positive)/short(negative) filled/opened positions at the beginning and continue the normal trading behavior
-    gridRetainOpenedLots = "gridRetainOpenedLots"  # Adjust start prices dynamically to retain certain long(positive)/short(negative) filled/opened positions all the time until be disabled to get back to normal behavior
+    gridRetainOpenedLots = "gridRetainOpenedLots"  # Adjust start prices dynamically to retain certain long(positive)/short(negative) filled/opened positions all the time until been reset to normal behavior
     gridTradeRetainedLots = "gridTradeRetainedLots"  # Set as false to avoid trading retained open lots in favor of reducing trades
     gridNoMoreOpenOrders = "gridNoMoreOpenOrders"  # No more open orders, use this flag to close all open positions and stop trading on this security!
     gridNoMoreCloseOrders = "gridNoMoreCloseOrders"  # No more close orders, use this flag to stop placing close orders on this security!

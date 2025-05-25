@@ -1,0 +1,80 @@
+#!/bin/bash
+
+### Run regression testings under the folder regress ###
+
+if [ -z "$1" ]; then
+  echo "Please specify regression testing group/dir name or ALL to test all groups! e.g. ScalpNQ, ALL"
+  exit 1
+fi
+
+GROUP_NAME=$1
+# Remove the last slash /
+if [[ $GROUP_NAME == */ ]]; then
+  GROUP_NAME=${GROUP_NAME////}
+  # GROUP_NAME=$(echo "$GROUP_NAME" | sed 's/.$//')
+fi
+
+echo "Regression testing ${GROUP_NAME}..."
+
+MAIN_CODE=main.py
+MAIN_CODE_BAK=main.py.bak
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+REGRESS_DIR=$(dirname "${SCRIPT_DIR}")/regress
+PROJECT_DIR=$(dirname "${REGRESS_DIR}")
+PROJECT_NAME=$(basename "${PROJECT_DIR}")
+REPORT_FILE="${REGRESS_DIR}"/report.txt
+
+# Always use llc for backtest!
+QC_USER=llc
+
+# Login QuantConnect user if required
+if [ -n "${QC_USER}" ]; then
+  source "${SCRIPT_DIR}"/login "${QC_USER}"
+fi
+
+# Back to lean home dir
+cd "${PROJECT_DIR}"/.. || exit
+
+cp "${PROJECT_DIR}"/${MAIN_CODE} "${PROJECT_DIR}"/${MAIN_CODE_BAK}
+
+keywords=()
+keywords+=("│ Return                      │")
+keywords+=("│ Unrealized                 │")
+keywords+=("│ Total Orders               │")
+keywords+=("│ Drawdown                   │")
+for TEST_DIR in "${REGRESS_DIR}"/*; do
+  if [[ -d ${TEST_DIR} && ("${GROUP_NAME}" == "ALL" || $(basename "${TEST_DIR}") == "${GROUP_NAME}") ]]; then
+    for TEST_FILE in "${TEST_DIR}"/*.txt; do
+      echo "Backtesting ${TEST_FILE}..."
+      cp "${TEST_FILE}" "${PROJECT_DIR}"/${MAIN_CODE}
+      # Run backtest on project
+      lean cloud backtest "${PROJECT_NAME}" --push --name "$(basename "${TEST_FILE}")" | tee "${REPORT_FILE}"
+      # Start comparing results
+      for keyword in "${keywords[@]}"; do
+        TEST_LINE=$(grep -F -m 1 "${keyword}" "${TEST_FILE}")
+        REPORT_LINE=$(grep -F -m 1 "${keyword}" "${REPORT_FILE}")
+        if [[ "${TEST_LINE}" != "${REPORT_LINE}" ]]; then
+          echo -e "!!!FAILED TO MATCH: \n${TEST_LINE} \n${REPORT_LINE}"
+          # Restore and clean up
+          cp "${PROJECT_DIR}"/${MAIN_CODE_BAK} "${PROJECT_DIR}"/${MAIN_CODE}
+          rm "${PROJECT_DIR}"/${MAIN_CODE_BAK}
+          rm -f "${REPORT_FILE}"
+          exit 3
+        fi
+      done
+    done
+  fi
+done
+
+echo "Completed regression testing successfully."
+
+# Restore and clean up
+cp "${PROJECT_DIR}"/${MAIN_CODE_BAK} "${PROJECT_DIR}"/${MAIN_CODE}
+rm "${PROJECT_DIR}"/${MAIN_CODE_BAK}
+rm -f "${REPORT_FILE}"
+
+# Login back to llc
+if [[ ${QC_USER} != "llc" ]]; then
+  source "${SCRIPT_DIR}"/login llc
+fi

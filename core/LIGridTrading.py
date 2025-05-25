@@ -449,10 +449,10 @@ class LIGridTrading(LIGridBase):
                 if lot.hasOpenPosition() or lot.hasClosePosition():
                     alert(f"{self.getNotifyPrefix()}: Skewed grid lots, please reset the paused lot: {lot}")
                     return True
-            elif lot.hasOpenPosition():
+            elif lot.hasOpenPosition() and lot.isNotRetainedLot():
                 filledLotMinId = min(filledLotMinId, lot.lotId)
             lot = lot.nextLot
-        if self.countFilledLots()[1] and pausedLotMaxId >= filledLotMinId:
+        if self.countFilledLots()[1] and pausedLotMaxId > filledLotMinId:
             alert(f"{self.getNotifyPrefix()}: Skewed grid lots, the paused lots should stay close to head: "
                   f"pausedLotMaxId={pausedLotMaxId}, filledLotMinId={filledLotMinId}.")
             return True
@@ -466,10 +466,10 @@ class LIGridTrading(LIGridBase):
                 pausedLotMinId = min(pausedLotMinId, lot.lotId)
                 if lot.hasOpenPosition() or lot.hasClosePosition():
                     alert(f"{self.getNotifyPrefix()}: Skewed grid lots, please reset the paused lot {lot}")
-            elif lot.hasOpenPosition():
+            elif lot.hasOpenPosition() and lot.isNotRetainedLot():
                 filledLotMaxId = max(filledLotMaxId, lot.lotId)
             lot = lot.prevLot
-        if self.countFilledLots()[2] and pausedLotMinId <= filledLotMaxId:
+        if self.countFilledLots()[2] and pausedLotMinId < filledLotMaxId:
             alert(f"{self.getNotifyPrefix()}: Skewed grid lots, the paused lots should stay close to tail: "
                   f"pausedLotMaxId={pausedLotMaxId}, filledLotMinId={filledLotMinId}.")
             return True
@@ -479,7 +479,7 @@ class LIGridTrading(LIGridBase):
         while lot:
             longLots += 1
             nextLot = lot.nextLot
-            if lot.accruedLostPoints == 0 and nextLot:
+            if lot.accruedLostPoints == 0 and lot.isNotRetainedLot() and nextLot:
                 if lot.lotId >= nextLot.lotId:
                     return True  # lot id is not in order
                 if lot.hasOpenPosition() and nextLot.hasOpenPosition():
@@ -498,7 +498,7 @@ class LIGridTrading(LIGridBase):
         while lot:
             shortLots += 1
             prevLot = lot.prevLot
-            if lot.accruedLostPoints == 0 and prevLot:
+            if lot.accruedLostPoints == 0 and lot.isNotRetainedLot() and prevLot:
                 if lot.lotId <= prevLot.lotId:
                     return True  # lot id is not in order
                 if lot.hasOpenPosition() and prevLot.hasOpenPosition():
@@ -519,7 +519,7 @@ class LIGridTrading(LIGridBase):
         lot = self.startLot.nextLot
         while lot and lot.nextLot:
             prevLot = lot.prevLot
-            if not lot.isRetainedLot() and not areLotsInOrder(lot, lot.nextLot):
+            if lot.isNotRetainedLot() and not areLotsInOrder(lot, lot.nextLot):
                 swapGridLots(lot, lot.nextLot)
                 log(f"{self.getSymbolAlias()}: Swapped lot {lot} with {lot.nextLot}.", self.verbose)
                 if prevLot and prevLot.isLongLot():
@@ -530,7 +530,7 @@ class LIGridTrading(LIGridBase):
         lot = self.startLot.prevLot
         while lot and lot.prevLot:
             nextLot = lot.nextLot
-            if not lot.isRetainedLot() and not areLotsInOrder(lot, lot.prevLot):
+            if lot.isNotRetainedLot() and not areLotsInOrder(lot, lot.prevLot):
                 swapGridLots(lot, lot.prevLot)
                 log(f"{self.getSymbolAlias()}: Swapped lot {lot} with {lot.nextLot}.", self.verbose)
                 if nextLot and nextLot.isShortLot():
@@ -569,7 +569,7 @@ class LIGridTrading(LIGridBase):
             if self.startLot is None:
                 self.startGridSession()
             elif not self.positionManager.isInvested():
-                self.restartGridSession()
+                self.restartGridSession(reason="Add new security")
 
     def onData(self, data: Slice):
         # log(f"onData: {data}")
@@ -587,7 +587,7 @@ class LIGridTrading(LIGridBase):
             else:
                 self.manageGridTrading(forceTrade=True)  # Trigger all related actions
 
-    def restartGridSession(self, startPrices=None):
+    def restartGridSession(self, startPrices=None, reason=None):
         if self.isBoostingModeActivated():
             self.cancelActiveOrders()
             self.manageGridBoosting()
@@ -597,7 +597,7 @@ class LIGridTrading(LIGridBase):
         self.liquidatedAlready = False
         self.sessionStartedTime = getAlgo().Time
         self.initializeGridLots()
-        self.restartTradingLots()
+        self.restartTradingLots(reason)
         self.deleteGridMetadata()
         self.resetGridStartPrices(startPrices, emptyStartPrices=True, emptyOpenFromPrices=True)
         self.cancelActiveOrders()
@@ -696,7 +696,7 @@ class LIGridTrading(LIGridBase):
 
         return hasAnyUpdates
 
-    def liquidateGridSession(self, reason, markRollover=False):
+    def liquidateGridSession(self, reason, markRollover=False, markStopLoss=False):
         if foundLiquidationOrder(self.positionManager.getSecurity()):
             return False  # Abort
         if self.isBuyAndHoldMode():
@@ -720,7 +720,14 @@ class LIGridTrading(LIGridBase):
             self.realizedProfitLoss += unrealizedProfitAmount
             addDailyClosedTrade(self.canonicalSymbol.value, [unrealizedProfitAmount, 0, investedCapital, investedQuantity, 0])
         if markRollover:
-            self.gridRolloverCriteria = (self.getSymbolValue(), filledLots[0], investedQuantity)  # Mark to rollover in next session!
+            self.gridRolloverCriteria = (self.getSymbolValue(), filledLots[0], investedQuantity,
+                                         unrealizedProfitAmount + self.rolloverProfitLoss)  # Mark to rollover in next session!
+        else:
+            self.rolloverProfitLoss = 0.0
+        if markStopLoss:
+            self.liquidatedAtPrice = self.getMarketPrice()
+        else:
+            self.liquidatedAtPrice = 0.0
         notifyMsg = f"{self.getNotifyPrefix()}: Liquidated due to {reason} and closed session#{self.sessionId}: " \
                     f"tradesCount={tradesCount}, " \
                     f"ordersCount={ordersCount}, " \
@@ -729,7 +736,7 @@ class LIGridTrading(LIGridBase):
                     f"investedCapital={investedCapital:.2f}, " \
                     f"totalNetProfit={totalNetProfitAmount:,.2f}({totalNetProfitPercent}%), " \
                     f"unrealizedProfit={unrealizedProfitAmount:,.2f}({unrealizedProfitPercent}%), " \
-                    f"rolloverCriteria={self.gridRolloverCriteria}. "
+                    f"liquidatedAtPrice={self.liquidatedAtPrice}, rolloverCriteria={self.gridRolloverCriteria}. "
         notify(notifyMsg)
         return True
 
@@ -777,7 +784,10 @@ class LIGridTrading(LIGridBase):
             self.realizedProfitLoss += unrealizedProfitAmount
             addDailyClosedTrade(self.canonicalSymbol.value, [unrealizedProfitAmount, 0, investedCapital, investedQuantity, 0])
         if markRollover:
-            self.gridRolloverCriteria = (self.getSymbolValue(), filledLots, investedQuantity)  # Mark to rollover in next session!
+            self.gridRolloverCriteria = (self.getSymbolValue(), filledLots, investedQuantity,
+                                         unrealizedProfitAmount + self.rolloverProfitLoss)  # Mark to rollover in next session!
+        else:
+            self.rolloverProfitLoss = 0.0
         notifyMsg = f"{self.getNotifyPrefix()}: Liquidated grid trading security {security.Symbol.Value} due to {reason}: " \
                     f"filledLots={filledLots}, " \
                     f"investedQuantity={investedQuantity}, " \
@@ -803,11 +813,10 @@ class LIGridTrading(LIGridBase):
                 self.liquidateGridSession(f"{LIConfigKey.liquidateAndStopTrading}={self.liquidateAndStopTrading}")
                 notify(f"{self.getNotifyPrefix()}: Stopped trading as {LIConfigKey.liquidateAndStopTrading}={self.liquidateAndStopTrading}, "
                        f"please remove {LIConfigKey.liquidateAndStopTrading} to start a new session or keep stopping!")
-                self.deleteGridMetadata()  # Next session will use fresh start prices
-                self.saveMetadataAtEnd = False
+                self.postLiquidationMetadata()
             return True  # Abort on demand
-        # Liquidate on reached prices: liquidate and stop or restart trading!
         marketPrice = self.getMarketPrice(bar)
+        countFilledLots = self.countFilledLots()
         unrealizedProfitAmount = self.getUnrealizedProfitAmount()
         unrealizedProfitPercent = self.getUnrealizedProfitPercent()
         if self.liquidatedAlready and isMarketCloseTime(getAlgo().time):
@@ -829,6 +838,7 @@ class LIGridTrading(LIGridBase):
         #         self.saveMetadataAtEnd = False
         #         self.liquidateAndStopTrading = True
         #     return True
+        # Liquidate on reached prices with profit: liquidate and stop or restart trading!
         if self.liquidateOnReachedPrices and unrealizedProfitAmount > 0:
             if (self.liquidateByTrailingProfit > 0 or
                     (self.getInvestedQuantity() > 0 and marketPrice >= self.liquidateOnReachedPrices[self.getGridLongSide()]) or
@@ -858,14 +868,13 @@ class LIGridTrading(LIGridBase):
                            f"unrealizedProfit={unrealizedProfitAmount}({unrealizedProfitPercent}%), "
                            f"please remove {LIConfigKey.liquidateOnReachedPrices} or redeploy ASAP!")
                     # self.liquidateOnReachedPrices = None  # Not reset will restrict future trading within the range of reached prices
-                    self.restartGridSession()
+                    self.restartGridSession(reason="Restart after liquidation")
                 else:
                     notify(f"{self.getNotifyPrefix()}: Stopped trading after liquidated due to {tagLog}, "
                            f"unrealizedProfit={unrealizedProfitAmount}({unrealizedProfitPercent}%), "
                            f"please remove or adjust {LIConfigKey.liquidateOnReachedPrices} and redeploy ASAP!")
-                    self.deleteGridMetadata()  # Next session will use fresh start prices
-                    self.saveMetadataAtEnd = False
                     self.liquidateAndStopTrading = True
+                    self.postLiquidationMetadata()
                 return True  # Abort on demand
         # Liquidate on take profit amount: liquidate and stop or restart trading!
         if self.getLiquidateOnTakeProfitAmount() and (self.liquidateByTrailingProfit > 0 or
@@ -883,14 +892,13 @@ class LIGridTrading(LIGridBase):
             if self.liquidateProfitAndRestartTrading:
                 notify(f"{self.getNotifyPrefix()}: Restarted a new trading session after liquidated due to {tagLog}, "
                        f"please remove {LIConfigKey.liquidateOnTakeProfitAmount} or keep as it is!")
-                self.restartGridSession()
+                self.restartGridSession(reason="Restart after liquidation")
             else:
                 notify(f"{self.getNotifyPrefix()}: Stopped trading after liquidated due to {tagLog}, "
                        f"{LIMetadataKey.liquidateByTrailingProfit}={self.liquidateByTrailingProfit}, "
                        f"please remove {LIConfigKey.liquidateOnTakeProfitAmount} and redeploy ASAP!")
-                self.deleteGridMetadata()  # Next session will use fresh start prices
-                self.saveMetadataAtEnd = False
                 self.liquidateAndStopTrading = True
+                self.postLiquidationMetadata()
             return True  # Abort on demand
         # Liquidate on take profit percent: liquidate and stop or restart trading!
         if self.liquidateOnTakeProfitPercent and (self.liquidateByTrailingProfit > 0 or
@@ -909,47 +917,53 @@ class LIGridTrading(LIGridBase):
                 notify(f"{self.getNotifyPrefix()}: Restarted a new trading session after liquidated due to {tagLog}, "
                        f"{LIMetadataKey.liquidateByTrailingProfit}={self.liquidateByTrailingProfit}%, "
                        f"please remove {LIConfigKey.liquidateOnTakeProfitPercent} or keep as it is!")
-                self.restartGridSession()
+                self.restartGridSession(reason="Restart after liquidation")
             else:
                 notify(f"{self.getNotifyPrefix()}: Stopped trading after liquidated due to {tagLog}, "
                        f"{LIMetadataKey.liquidateByTrailingProfit}={self.liquidateByTrailingProfit}%, "
                        f"please remove {LIConfigKey.liquidateOnTakeProfitPercent} and redeploy ASAP!")
-                self.deleteGridMetadata()  # Next session will use fresh start prices
-                self.saveMetadataAtEnd = False
                 self.liquidateAndStopTrading = True
+                self.postLiquidationMetadata()
             return True  # Abort on demand
         # Liquidate on stop loss amount: liquidate and stop or restart trading!
         if self.getLiquidateOnStopLossAmount() and 0 > unrealizedProfitAmount <= -abs(self.getLiquidateOnStopLossAmount()):
             tagLog = f"unrealizedProfit={unrealizedProfitAmount}({unrealizedProfitPercent}%) <= stopLossAmount=-{abs(self.getLiquidateOnStopLossAmount())}"
-            self.liquidateGridSession(tagLog)
+            self.liquidateGridSession(tagLog, markStopLoss=True)
             if self.liquidateLossAndRestartTrading:
                 notify(f"{self.getNotifyPrefix()}: Restarted a new trading session after liquidated due to {tagLog}, "
                        f"please remove {LIConfigKey.liquidateOnStopLossAmount} or keep as it is!")
-                self.restartGridSession()
+                self.restartGridSession(reason="Restart after liquidation")
+            elif self.liquidateLossAndPauseTrading:
+                notify(f"{self.getNotifyPrefix()}: Paused one side of grid lots after liquidated due to {tagLog}, "
+                       f"Will resume trading once market price revert back to stopped loss price!")
+                self.resetTradingLots(reason="Reset after stop loss liquidation")
+                self.resetGridStartPrices(emptyStartPrices=True, emptyOpenFromPrices=True)
             else:
                 notify(f"{self.getNotifyPrefix()}: Stopped trading after liquidated due to {tagLog}, "
                        f"please study market, adjust settings and redeploy ASAP!")
-                self.deleteGridMetadata()  # Next session will use fresh start prices
-                self.saveMetadataAtEnd = False
                 self.liquidateAndStopTrading = True
+                self.postLiquidationMetadata()
             return True  # Abort on demand
         # Liquidate on stop loss percent: liquidate and stop trading!
         if self.liquidateOnStopLossPercent and 0 > unrealizedProfitPercent <= -abs(self.liquidateOnStopLossPercent):
             tagLog = f"unrealizedProfit={unrealizedProfitPercent}%({unrealizedProfitAmount}) <= stopLossPercent=-{self.liquidateOnStopLossPercent}%"
-            self.liquidateGridSession(tagLog)
+            self.liquidateGridSession(tagLog, markStopLoss=True)
             if self.liquidateLossAndRestartTrading:
                 notify(f"{self.getNotifyPrefix()}: Restarted a new trading session after liquidated due to {tagLog}, "
                        f"please remove {LIConfigKey.liquidateOnStopLossPercent}% or keep as it is!")
-                self.restartGridSession()
+                self.restartGridSession(reason="Restart after liquidation")
+            elif self.liquidateLossAndPauseTrading:
+                notify(f"{self.getNotifyPrefix()}: Paused one side of grid lots after liquidated due to {tagLog}, "
+                       f"Will resume trading once market price revert back to stopped loss price!")
+                self.resetTradingLots(reason="Reset after stop loss liquidation")
+                self.resetGridStartPrices(emptyStartPrices=True, emptyOpenFromPrices=True)
             else:
                 notify(f"{self.getNotifyPrefix()}: Stopped trading after liquidated due to {tagLog}, "
                        f"please study market, adjust settings and redeploy ASAP!")
-                self.deleteGridMetadata()  # Next session will use fresh start prices
-                self.saveMetadataAtEnd = False
                 self.liquidateAndStopTrading = True
+                self.postLiquidationMetadata()
             return True  # Abort on demand
-
-        # Restart if all lots on the same size has been paused!
+        # Restart if all lots on the same side have been paused!
         if self.gridRestartIfAllLotsPaused and not (self.isBoostingMode() or self.isBuyAndHoldMode()):
             allPausedSide = None
             if self.gridLongLots and self.countPausedLots(self.getFirstLongLot()) == self.gridLongLots:
@@ -959,9 +973,19 @@ class LIGridTrading(LIGridBase):
             if allPausedSide:
                 notify(f"{self.getNotifyPrefix()}: Restarted a new trading session after liquidated due to all {allPausedSide} lots have been paused!")
                 self.liquidateGridSession(f"gridRestartIfAllLotsPaused={self.gridRestartIfAllLotsPaused}")
-                self.restartGridSession()
+                self.restartGridSession(reason="Restart after liquidation")
                 return True  # Abort on demand
         return False  # Not liquidated at last!
+
+    def postLiquidationMetadata(self):
+        # self.deleteGridMetadata()  # Next session will use fresh start prices
+        # self.saveMetadataAtEnd = False
+        self.saveTradingMetadata(logging=True)
+        notifyMsg = f"Liquidated this trading account {LIGlobal.algoName} with following metadata:\n\n"
+        metadata = collectMetadata()
+        for key in sorted(metadata.keys()):
+            notifyMsg += f"{key}: \n{metadata[key]}\n\n"
+        alert(notifyMsg, "Metadata")
 
     def getLiquidateOnStopLossAmount(self):
         if self.liquidateOnStopLossAmount:
@@ -1310,7 +1334,7 @@ class LIGridTrading(LIGridBase):
             # Check possible close orders from the last lot for the rest
             lot = self.getLastLongLot()
             while lot and lot.isLongLot() and lot != lastGridLot:
-                if not lot.isRetainedLot() and not lot.isBoostingLot() and lot.hasCloseOrderTicket():
+                if lot.isNotRetainedLot() and not lot.isBoostingLot() and lot.hasCloseOrderTicket():
                     closingOrders += 1
                     if closingOrders > self.gridMaintainCloseOrders:
                         if lot.closeOrderTicket.OrderType == OrderType.Limit:
@@ -1341,7 +1365,7 @@ class LIGridTrading(LIGridBase):
             # Check possible close orders from the last lot for the rest
             lot = self.getLastShortLot()
             while lot and lot.isShortLot() and lot != lastGridLot:
-                if not lot.isRetainedLot() and not lot.isBoostingLot() and lot.hasCloseOrderTicket():
+                if lot.isNotRetainedLot() and not lot.isBoostingLot() and lot.hasCloseOrderTicket():
                     closingOrders += 1
                     if closingOrders > self.gridMaintainCloseOrders:
                         if lot.closeOrderTicket.OrderType == OrderType.Limit:
@@ -1373,6 +1397,7 @@ class LIGridTrading(LIGridBase):
         self.gridMetadata: dict = readMetadata(self.gridMetadataKey, "dict", default={})
         self.gridLotsMetadata: dict = readMetadata(self.gridLotsMetadataKey, "dict", default={})
         self.restoreGridMetadata(postRollover=True)
+        self.rolloverProfitLoss = self.gridRolloverCriteria[3]
         # Rollover holding positions
         if self.gridRolloverCriteria[2] > 0 and not self.positionManager.isInvested():  # Skip if already invested!
             limitStopPrices = f", limitStopPrices={self.gridLimitStartPrices}" if self.gridLimitStartPrices else ""
@@ -1506,7 +1531,7 @@ class LIGridTrading(LIGridBase):
         # It's time to switch back to origin mode
         self.gridMode = self.gridInitMode
         self.storeGridMetadata()
-        self.restartGridSession()
+        self.restartGridSession(reason="Switch off Boosting Mode")
         if self.gridBoostingKeepTrading:
             self.liquidateAndStopTrading = False
         else:
@@ -1530,7 +1555,7 @@ class LIGridTrading(LIGridBase):
             if self.liquidateOnFridayClose:
                 self.liquidateGridSession("FRIDAY CLOSE")
                 if self.gridRestartOnFridayClose:
-                    self.restartGridSession()
+                    self.restartGridSession(reason="Restart on FRIDAY CLOSE")
         super().onCloseOfMarket()
 
     def onEndOfDay(self, symbol: Symbol):
@@ -1618,7 +1643,7 @@ class LIGridTrading(LIGridBase):
                 getAlgo().Quit("Quit algorithm on INITIALIZE SESSION!")
                 return  # Quit execution immediately!
             else:
-                self.restartGridSession(startPrices=self.gridStartPrices)
+                self.restartGridSession(startPrices=self.gridStartPrices, reason="Start grid session")
         else:
             self.initBacktestStatus()
             self.restoreGridMetadata()
@@ -1630,11 +1655,29 @@ class LIGridTrading(LIGridBase):
             self.printGridTargetPrices()
             self.printGridSession(withLots=True)
 
-    def restartTradingLots(self):
+    def resetTradingLots(self, reason=None):
         lot = self.getTradeLot()
         while lot:
-            lot.restartTradingLot("Restart grid session")
+            lot.resetTradingLot(reason)
             lot = lot.getNextLot()
+
+    def restartTradingLots(self, reason=None):
+        lot = self.getTradeLot()
+        while lot:
+            lot.restartTradingLot(reason)
+            lot = lot.getNextLot()
+
+    def pauseTradingLots(self, countFilledLots=None):
+        if not countFilledLots or countFilledLots[1] > 0:  # Long side lots
+            temp = self.startLot
+            while temp.nextLot:
+                temp.nextLot.pausedOpening = True
+                temp = temp.nextLot
+        if not countFilledLots or countFilledLots[2] > 0:  # Short side lots
+            temp = self.startLot
+            while temp.prevLot:
+                temp.prevLot.pausedOpening = True
+                temp = temp.prevLot
 
     def isLongSideActive(self) -> bool:
         if self.tradeBothSides():
@@ -2072,7 +2115,7 @@ class LIGridTrading(LIGridBase):
                        f"dcaLastInvestedDate={printFullTime(self.dcaLastInvestedDate)}.")
                 self.dcaMaxStartPrice = startPrice
                 self.dcaHoldingQuantity = self.getInvestedQuantity()
-                self.restartGridSession()
+                self.restartGridSession(reason="Getting a higher start price")
         # Check whether it's time to fill a regular investment
         algoTime = bar.EndTime if bar else getAlgo().Time
         if isActiveTradingTime(algoTime) and (self.getInvestedQuantity() == 0 or (self.dcaLastInvestedDate + self.getPeriodicityTimedelta()) < algoTime):

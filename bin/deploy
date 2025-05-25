@@ -1,0 +1,103 @@
+#!/bin/bash
+
+if [ -z "$1" ]; then
+  echo "Please specify the account name! e.g. LifelongPaper"
+  exit 1
+fi
+
+ACCOUNT=$1
+# Remove the last slash /
+if [[ $ACCOUNT == */ ]]; then
+  ACCOUNT=${ACCOUNT////}
+  # ACCOUNT=$(echo "$ACCOUNT" | sed 's/.$//')
+fi
+
+# Double check confirm dialog
+read -p "Are you sure to deploy/redeploy ${ACCOUNT} (y/n)? " -n 1 -r
+echo # (optional) move to a new line
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+  exit 2
+fi
+
+echo "Deploying/Redeploying ${ACCOUNT}..."
+
+MAIN_CODE=main.py
+CONFIG_FILE=config.json
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+LIVE_DIR=$(dirname "${SCRIPT_DIR}")/live
+PROJECT_DIR=$(dirname "${LIVE_DIR}")
+ACCOUNT_CONFIG="${LIVE_DIR}"/${ACCOUNT}
+ACCOUNT_PROJECT="$(dirname "${PROJECT_DIR}")"/${ACCOUNT}
+
+if [ ! -d "${ACCOUNT_CONFIG}" ]; then
+  echo "Directory ${ACCOUNT_CONFIG} DOES NOT exists!"
+  exit 3
+fi
+
+# Confirm setting gridInitializeSession: True
+MATCHED_LINE=$(grep -E -n "^\s*LIConfigKey\.(gridInitializeSession)\s*:\s*True", "${ACCOUNT_CONFIG}"/${MAIN_CODE})
+if [ -n "${MATCHED_LINE}" ]; then
+  read -p "Are you sure to !!!LIQUIDATE!!! this strategy as #${MATCHED_LINE} (y/n)? " -n 1 -r
+  echo # (optional) move to a new line
+  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    exit 4
+  fi
+fi
+
+# Load account credentials/keys
+# shellcheck disable=SC1090
+source ~/lean/secret/"${ACCOUNT}".key
+
+# Login QuantConnect user if required
+if [ -n "${QC_USER}" ]; then
+  source "${SCRIPT_DIR}"/login "${QC_USER}"
+fi
+
+# Go back to lean home dir
+cd "${PROJECT_DIR}"/.. || exit
+
+# Sync to live project dir
+rsync -a --delete "${PROJECT_DIR}"/ "${ACCOUNT_PROJECT}"/
+
+# Copy over main/config files
+cp "${ACCOUNT_CONFIG}"/${MAIN_CODE} "${ACCOUNT_PROJECT}"/${MAIN_CODE}
+cp "${ACCOUNT_CONFIG}"/${CONFIG_FILE} "${ACCOUNT_PROJECT}"/${CONFIG_FILE}
+
+# Push local changes to cloud
+lean cloud push --project "${ACCOUNT}"
+# Pull cloud code back to local
+lean cloud pull --project "${ACCOUNT}"
+
+status=$(lean cloud status "${ACCOUNT}")
+echo "Checking project status:"
+echo "$status"
+
+while [[ $status == *"Live status: Running"* ]]
+do
+  echo "Stopping current live project in 20 seconds..."
+  lean cloud live stop "${ACCOUNT}"
+  sleep 20 # Sleep a few seconds
+  status=$(lean cloud status "${ACCOUNT}")
+  echo "Checking project status:"
+  echo "$status"
+done
+
+echo "Please follow below steps to deploy and go live!"
+# --data-provider-live "Interactive Brokers" \
+lean cloud live deploy "${ACCOUNT}" \
+  --node "${ACCOUNT}" \
+  --auto-restart yes \
+  --notify-insights no \
+  --notify-order-events no \
+  --brokerage "Interactive Brokers" \
+  --data-provider-live "QuantConnect" \
+  --ib-weekly-restart-utc-time "22:00:00" \
+  --ib-account "${ACCOUNT_ID}" \
+  --ib-user-name "${USERNAME}" \
+  --ib-password "${PASSWORD}"
+
+# Login back to llc
+if [[ ${QC_USER} != "llc" ]]; then
+  source "${SCRIPT_DIR}"/login llc
+fi
