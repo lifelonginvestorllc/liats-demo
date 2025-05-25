@@ -106,16 +106,17 @@ class LifelongInvestorMain(LIAlgorithm):
             # LIConfigKey.futureContractExpiry: date(2025, 6, 20),
             # LIConfigKey.closeWithStopOrderType: True,
             # Better to liquidate at some point to exit one side of trading
-            LIConfigKey.liquidateOnStopLossAmount: 100_000 * amplifier,  # 100_000 * amplifier,
-            LIConfigKey.liquidateLossAndRestartTrading: False,
+            LIConfigKey.liquidateOnStopLossAmount: 10_000 * amplifier,  # 100_000 * amplifier,
+            LIConfigKey.liquidateLossAndPauseTrading: True,
+            # LIConfigKey.liquidateLossAndRestartTrading: True,
             # Adjust it dynamically based on current market trend/volatility and paired strategy's profit loss!
             LIConfigKey.liquidateOnTakeProfitAmount: 50_000 * amplifier,  # 50_000 * amplifier,
             # LIConfigKey.gridNoMoreOpenOrders: True,
-            LIConfigKey.gridLongLots: 10,
+            LIConfigKey.gridLongLots: 20,
             # LIConfigKey.gridShortLots: 20,
             LIConfigKey.gridLotLevelPercent: 0.6,  # 0.60,
             LIConfigKey.gridLotLevelAugment: 0.015,  # Perform better in a long run with volatile market
-            LIConfigKey.gridLotStopLossFactor: 15,
+            LIConfigKey.gridLotStopLossFactor: 25,
             LIConfigKey.gridLotStopProfitFactors: (0.5, 2),
             LIConfigKey.gridLotPauseAfterStopLoss: True,
             LIConfigKey.gridRestartIfAllLotsPaused: False,
@@ -194,7 +195,7 @@ class LifelongInvestorMain(LIAlgorithm):
         # self.SetEndDate(date(2022, 3, 15))
 
         configs = {
-            LIConfigKey.aliasName: "OilTrend",
+            LIConfigKey.aliasName: "OilBoth",
             # LIConfigKey.verbose: True,
             LIConfigKey.monitorPeriod: 1,
             LIConfigKey.resolution: LIResolution.HOUR,
@@ -210,7 +211,7 @@ class LifelongInvestorMain(LIAlgorithm):
             LIConfigKey.liquidateOnTakeProfitAmount: 75_000,
             # LIConfigKey.liquidateByTrailingProfitPercent: 15,
             LIConfigKey.liquidateOnStopLossAmount: 150_000,
-            # LIConfigKey.liquidateLossAndRestartTrading: True,
+            LIConfigKey.liquidateLossAndRestartTrading: True,
             # LIConfigKey.gridNoMoreOpenOrders: True,
             # LIConfigKey.gridRetainOpenedLots: -1,
             LIConfigKey.gridLongLots: 20,  # 20
@@ -230,7 +231,7 @@ class LifelongInvestorMain(LIAlgorithm):
             LIConfigKey.gridBandingStartPrices: True,
             LIConfigKey.gridBandingOpenFromPrices: True,
             LIConfigKey.bollingerBandsParams: [(365, 1.25)],
-            LIConfigKey.gridInitializeSession: True
+            LIConfigKey.gridInitializeSession: True,  # Be careful!
         }
         investAmount = LIInvestAmount(lotQuantity=1)
         self.liStrategies.append(LIFutureGridTradingContrarian(Futures.Energies.CrudeOilWTI, investAmount, **configs))  # (282/184.28%/-12.9%)
@@ -1133,7 +1134,7 @@ class LifelongInvestorMain(LIAlgorithm):
         # self.SetEndDate(date(2025, 5, 1))
         # (631/13.01%/-11.4%)
         self.SetStartDate(date(2025, 1, 1))
-        self.SetEndDate(date(2025, 5, 1))
+        self.SetEndDate(date(2025, 6, 1))
 
         amplifier = 1  # Amplify invest amount by n times!
         configs = {
@@ -1261,13 +1262,13 @@ class LifelongInvestorMain(LIAlgorithm):
         # self.SetStartDate(date(2023, 1, 1))
         # self.SetEndDate(date(2023, 12, 31))
         # 2024 annual performance (288/59.37%/-30.50%) -> (286/80.65%/-30.10%) -> (287/81.00%/30.0%) -> (298/65.85%/-28.10%) -> (271/68.16%/-26.0%)
-        # self.SetStartDate(date(2024, 1, 1))
-        self.SetStartDate(date(2024, 10, 1))  # (131/11.72%/-10.70%) -> (101/7.60%/-6.6%) -> (98/25.93%/-7.9%)
+        self.SetStartDate(date(2024, 1, 1))
+        # self.SetStartDate(date(2024, 10, 1))  # (131/11.72%/-10.70%) -> (101/7.60%/-6.6%) -> (98/25.93%/-7.9%)
         self.SetEndDate(date(2024, 12, 31))
         # self.SetStartDate(date(2025, 2, 15))
         # self.SetEndDate(date(2025, 3, 15))
 
-        amplifier = 1  # Amplify invest amount by n times!
+        amplifier = 2  # Amplify invest amount by n times!
         configs = {
             LIConfigKey.aliasName: "NasdaqTrail",
             # LIConfigKey.verbose: True,
