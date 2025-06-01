@@ -213,6 +213,9 @@ class LIGridTrading(LIGridBase):
         elif self.isContrarianMode():
             return LIGridSide.STU
 
+    def getGridTradingSide(self):
+        return self.getGridLongSide() if self.getInvestedQuantity() >= 0 else self.getGridShortSide()
+
     def countOrderTickets(self):
         orderTicketsCount = 0
         for orderTicket in self.positionManager.getActiveOrderTickets():
@@ -725,9 +728,9 @@ class LIGridTrading(LIGridBase):
         else:
             self.rolloverProfitLoss = 0.0
         if markStopLoss:
-            self.liquidatedAtPrice = self.getMarketPrice()
+            self.stoppedLossPrices[self.getGridTradingSide()] = self.getMarketPrice()
         else:
-            self.liquidatedAtPrice = 0.0
+            self.stoppedLossPrices.pop(self.getGridTradingSide(), None)
         notifyMsg = f"{self.getNotifyPrefix()}: Liquidated due to {reason} and closed session#{self.sessionId}: " \
                     f"tradesCount={tradesCount}, " \
                     f"ordersCount={ordersCount}, " \
@@ -736,11 +739,11 @@ class LIGridTrading(LIGridBase):
                     f"investedCapital={investedCapital:.2f}, " \
                     f"totalNetProfit={totalNetProfitAmount:,.2f}({totalNetProfitPercent}%), " \
                     f"unrealizedProfit={unrealizedProfitAmount:,.2f}({unrealizedProfitPercent}%), " \
-                    f"liquidatedAtPrice={self.liquidatedAtPrice}, rolloverCriteria={self.gridRolloverCriteria}. "
+                    f"stoppedLossPrices={self.stoppedLossPrices}, rolloverCriteria={self.gridRolloverCriteria}. "
         notify(notifyMsg)
         return True
 
-    def liquidateGridSecurity(self, security: Security, reason, markRollover=False):
+    def liquidateGridSecurity(self, security: Security, reason, markRollover=False, markStopLoss=False):
         if foundLiquidationOrder(security):
             return False  # Abort
         if self.isBuyAndHoldMode():
@@ -788,12 +791,16 @@ class LIGridTrading(LIGridBase):
                                          unrealizedProfitAmount + self.rolloverProfitLoss)  # Mark to rollover in next session!
         else:
             self.rolloverProfitLoss = 0.0
+        if markStopLoss:
+            self.stoppedLossPrices[self.getGridTradingSide()] = self.getMarketPrice()
+        else:
+            self.stoppedLossPrices.pop(self.getGridTradingSide(), None)
         notifyMsg = f"{self.getNotifyPrefix()}: Liquidated grid trading security {security.Symbol.Value} due to {reason}: " \
                     f"filledLots={filledLots}, " \
                     f"investedQuantity={investedQuantity}, " \
                     f"investedCapital={investedCapital:.2f}, " \
                     f"unrealizedProfit={unrealizedProfitAmount:,.2f}({unrealizedProfitPercent:.2f}%), " \
-                    f"rolloverCriteria={self.gridRolloverCriteria}."
+                    f"stoppedLossPrices={self.stoppedLossPrices}, rolloverCriteria={self.gridRolloverCriteria}."
         notify(notifyMsg)
         return True
 
@@ -933,9 +940,9 @@ class LIGridTrading(LIGridBase):
                 notify(f"{self.getNotifyPrefix()}: Restarted a new trading session after liquidated due to {tagLog}, "
                        f"please remove {LIConfigKey.liquidateOnStopLossAmount} or keep as it is!")
                 self.restartGridSession(reason="Restart after liquidation")
-            elif self.liquidateLossAndPauseTrading:
-                notify(f"{self.getNotifyPrefix()}: Paused one side of grid lots after liquidated due to {tagLog}, "
-                       f"Will resume trading once market price revert back to stopped loss price!")
+            elif self.liquidateLossAndLimitTrading:
+                notify(f"{self.getNotifyPrefix()}: Limit {self.getGridTradingSide()} side of trading after liquidated due to {tagLog}, "
+                       f"Will resume trading once market price revert back to {self.stoppedLossPrices}!")
                 self.resetTradingLots(reason="Reset after stop loss liquidation")
                 self.resetGridStartPrices(emptyStartPrices=True, emptyOpenFromPrices=True)
             else:
@@ -952,9 +959,9 @@ class LIGridTrading(LIGridBase):
                 notify(f"{self.getNotifyPrefix()}: Restarted a new trading session after liquidated due to {tagLog}, "
                        f"please remove {LIConfigKey.liquidateOnStopLossPercent}% or keep as it is!")
                 self.restartGridSession(reason="Restart after liquidation")
-            elif self.liquidateLossAndPauseTrading:
-                notify(f"{self.getNotifyPrefix()}: Paused one side of grid lots after liquidated due to {tagLog}, "
-                       f"Will resume trading once market price revert back to stopped loss price!")
+            elif self.liquidateLossAndLimitTrading:
+                notify(f"{self.getNotifyPrefix()}: Limit {self.getGridTradingSide()} side of trading after liquidated due to {tagLog}, "
+                       f"Will resume trading once market price revert back to {self.stoppedLossPrices}!")
                 self.resetTradingLots(reason="Reset after stop loss liquidation")
                 self.resetGridStartPrices(emptyStartPrices=True, emptyOpenFromPrices=True)
             else:

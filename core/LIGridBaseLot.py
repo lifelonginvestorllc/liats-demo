@@ -401,6 +401,10 @@ class LIGridBaseLot:
 
     def getStopLossPrice(self) -> ():
         stopLossPrice = None
+        if self.gridTrading.liquidateLossAndLimitTrading:
+            stoppedLossPrices = self.gridTrading.stoppedLossPrices
+            if stoppedLossPrices and self.getGridSide() in stoppedLossPrices:
+                return stoppedLossPrices[self.getGridSide()], 0
         if self.gridLotStopLossFactor:
             openPrice = self.filledOpenPrice if self.filledOpenPrice else self.getOpenTargetPrice()
             if self.enableTrailingStopLoss:

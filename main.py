@@ -27,7 +27,7 @@ class LifelongInvestorMain(LIAlgorithm):
 
         self.futureGridTrading_Contrarian_Nasdaq()
         # self.futureGridTrading_Contrarian_Euro()
-        # self.futureGridTrading_Contrarian_Oil()
+        self.futureGridTrading_Contrarian_Oil()
 
         # self.futureGridTrading_Euro_Momentum()
         # self.futureGridTrading_Euro_Contrarian_Agile()
@@ -85,42 +85,43 @@ class LifelongInvestorMain(LIAlgorithm):
         # self.SetEndDate(date(2023, 12, 31))
         # 2024 annual performance: short(274/-15.16%/-62.2%); long(324/78.27%/-50.9%)
         # self.SetStartDate(date(2024, 1, 1))
+        self.SetStartDate(date(2025, 2, 19))
+        self.SetEndDate(date(2025, 3, 25))
         # self.SetEndDate(date(2024, 12, 31))
-        # self.SetStartDate(date(2024, 7, 1))
-        # self.SetEndDate(date(2024, 8, 15))
-        # A small wave for 1 month
-        self.SetStartDate(date(2024, 7, 22))
-        self.SetEndDate(date(2024, 8, 22))
-        self.SetStartDate(date(2025, 2, 15))
-        self.SetEndDate(date(2025, 5, 15))
-        # self.SetStartDate(date(2024, 1, 1))
-        # self.SetEndDate(date(2025, 2, 15))
-        # self.SetEndDate(date(2025, 5, 15))
+        self.SetStartDate(date(2025, 3, 25))
+        self.SetEndDate(date(2025, 6, 1))
+        # self.SetStartDate(datetime.now() - timedelta(days=365))
+        # self.SetEndDate(datetime.now())
 
         # Summary: Based on last 4 years performance, still need to predict bearish/bullish market
 
-        amplifier = 2  # Amplify invest amount by n times!
+        amplifier = 1  # Amplify invest amount by n times!
         configs = {
             LIConfigKey.aliasName: "NasdaqTrail",
             LIConfigKey.monitorPeriod: 5 * 3,
+            # LIConfigKey.monitorPeriod: 1,
+            # LIConfigKey.resolution: LIResolution.HOUR,
             # LIConfigKey.futureContractExpiry: date(2025, 6, 20),
             # LIConfigKey.closeWithStopOrderType: True,
+            # LIConfigKey.openWithMarketOrderType: False,
+            # LIConfigKey.closeWithMarketOrderType: False,
             # Better to liquidate at some point to exit one side of trading
-            LIConfigKey.liquidateOnStopLossAmount: 10_000 * amplifier,  # 100_000 * amplifier,
-            LIConfigKey.liquidateLossAndPauseTrading: True,
-            # LIConfigKey.liquidateLossAndRestartTrading: True,
+            LIConfigKey.liquidateOnStopLossAmount: 20_000 * amplifier,  # 100_000 * amplifier,
+            # LIConfigKey.liquidateLossAndLimitTrading: True,
+            LIConfigKey.liquidateLossAndRestartTrading: True,
             # Adjust it dynamically based on current market trend/volatility and paired strategy's profit loss!
             LIConfigKey.liquidateOnTakeProfitAmount: 50_000 * amplifier,  # 50_000 * amplifier,
             # LIConfigKey.gridNoMoreOpenOrders: True,
             LIConfigKey.gridLongLots: 20,
-            # LIConfigKey.gridShortLots: 20,
+            # LIConfigKey.gridShortLots: 20, # Never short for Nasdaq!
             LIConfigKey.gridLotLevelPercent: 0.6,  # 0.60,
             LIConfigKey.gridLotLevelAugment: 0.015,  # Perform better in a long run with volatile market
             LIConfigKey.gridLotStopLossFactor: 25,
             LIConfigKey.gridLotStopProfitFactors: (0.5, 2),
-            LIConfigKey.gridLotPauseAfterStopLoss: True,
+            LIConfigKey.gridLotPauseAfterStopLoss: False,
             LIConfigKey.gridRestartIfAllLotsPaused: False,
-            # LIConfigKey.gridTrailingOpenPriceFactor: 1.0,  # Fill back open orders eagerly! Enable for clear market trend!
+            LIConfigKey.gridCancelOrdersAfterClosed: True,
+            LIConfigKey.gridTrailingOpenPriceFactor: 1.0,  # Fill back open orders eagerly! Enable for clear market trend!
             # LIConfigKey.gridRetainOpenedLots: 2,
             # LIConfigKey.gridRealignOpenPositions: True,
             # LIConfigKey.gridHedgeEnabled: True,

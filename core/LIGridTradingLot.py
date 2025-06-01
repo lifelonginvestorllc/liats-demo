@@ -52,15 +52,15 @@ class LIGridTradingLot(LIGridBaseLot):
         marketPrice = self.getMarketPrice()
         targetPrice = self.getOpenTargetPrice()
         targetQuantity = self.getUnfilledQuantity()
-        liquidatedAtPrice = self.gridTrading.liquidatedAtPrice
+        stoppedLossPrices = self.gridTrading.stoppedLossPrices
         maintainOpenOrders = self.gridTrading.gridMaintainOpenOrders
 
-        # Check whether market revert back to liquidated price
-        if self.gridTrading.liquidateLossAndPauseTrading and liquidatedAtPrice:
+        # Check whether market revert back to the liquidated price
+        if self.gridTrading.liquidateLossAndLimitTrading:
             if self.isContrarianMode():
-                if self.isLongLot() and targetPrice < liquidatedAtPrice:
+                if self.isLongLot() and self.getGridSide() in stoppedLossPrices and targetPrice < stoppedLossPrices[self.getGridSide()]:
                     return False
-                if self.isShortLot() and targetPrice > liquidatedAtPrice:
+                if self.isShortLot() and self.getGridSide() in stoppedLossPrices and targetPrice > stoppedLossPrices[self.getGridSide()]:
                     return False
 
         # Reset paused trading if market price came back

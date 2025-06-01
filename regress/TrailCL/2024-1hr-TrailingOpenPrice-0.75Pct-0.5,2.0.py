@@ -34,6 +34,7 @@ class LifelongInvestorMain(LIAlgorithm):
             LIConfigKey.futureRolloverDays: 3,
             LIConfigKey.liquidateOnTakeProfitAmount: 75_000,
             LIConfigKey.liquidateOnStopLossAmount: 150_000,
+            LIConfigKey.liquidateLossAndLimitTrading: False,
             LIConfigKey.liquidateLossAndRestartTrading: True,
             LIConfigKey.gridLongLots: 20,  # 20
             LIConfigKey.gridShortLots: 20,  # 20

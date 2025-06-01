@@ -97,7 +97,7 @@ class LIDefault:
     liquidateOnTakeProfitPercent = None
     liquidateByTrailingProfitPercent = None
     liquidateAtMarketClosingTime = 0  # 0(False), 1(True), 2(Only on Gain), 3(Only on Loss)
-    liquidateLossAndPauseTrading = False
+    liquidateLossAndLimitTrading = False
     liquidateLossAndRestartTrading = False
     liquidateProfitAndRestartTrading = True
     limitOrderJitterTicks = 3
@@ -243,7 +243,7 @@ class LIConfigKey:
     stopTradingOnInvalidOrders = "stopTradingOnInvalidOrders"  # Stop trading after reached/exceeded the max number of invalid orders
     canTradeAtMarketClosingTime = "canTradeAtMarketClosingTime"  # Indicate whether allow to trade at market closing time
     liquidateAndStopTrading = "liquidateAndStopTrading"  # Liquidate this invested security and pause/stop trading for now, wait for next redeploy!
-    liquidateLossAndPauseTrading = "liquidateLossAndPauseTrading"  # Liquidate loss and pause the trading session until market revert back to exceed stopped loss price!
+    liquidateLossAndLimitTrading = "liquidateLossAndLimitTrading"  # Liquidate loss and limit the trading until market revert back to stoppedLossPrices!
     liquidateLossAndRestartTrading = "liquidateLossAndRestartTrading"  # Liquidate loss and restart the trading session with fresh settings!
     liquidateProfitAndRestartTrading = "liquidateProfitAndRestartTrading"  # Liquidate profit and restart the trading session with fresh settings!
     liquidateRemovedSecurity = "liquidateRemovedSecurity"  # Liquidate the removed security automatically in position manager by default!
