@@ -83,10 +83,6 @@ class LifelongInvestorMain(LIAlgorithm):
             # LIConfigKey.gridHedgeEnabled: True,
             # LIConfigKey.gridHedgeOverLosingLots: 5,
             # LIConfigKey.gridFollowAdverseTrend: True,
-            # LIConfigKey.gridBandingStartPrices: True,
-            # LIConfigKey.gridBandingFixedStartBand: "band-#2-upper",  # (282/138.59%/-41.4%)
-            # LIConfigKey.bollingerBandsParams: [(300, 1), (300, 2), (300, 3)],
-            # LIConfigKey.investAmountTierFactors: [0, 1, 2, 3, 4, 5, 6, 7],  # Mapping band tiers from upper to lower
             LIConfigKey.gridInitializeSession: True,  # Be careful!
         }
         investAmount = LIInvestAmount(lotQuantity=1 * amplifier)
@@ -96,23 +92,23 @@ class LifelongInvestorMain(LIAlgorithm):
 ┌────────────────────────────┬──────────────────┬─────────────────────────────┬────────────────┐
 │ Statistic                  │ Value            │ Statistic                   │ Value          │
 ├────────────────────────────┼──────────────────┼─────────────────────────────┼────────────────┤
-│ Equity                     │ $636,407.32      │ Fees                        │ -$916.56       │
-│ Holdings                   │ $684,344.00      │ Net Profit                  │ $328,720.77    │
-│ Probabilistic Sharpe Ratio │ 46.372%          │ Return                      │ 112.14 %       │
-│ Unrealized                 │ $7,686.55        │ Volume                      │ $62,850,731.00 │
+│ Equity                     │ $636,839.76      │ Fees                        │ -$918.84       │
+│ Holdings                   │ $854,750.00      │ Net Profit                  │ $328,718.49    │
+│ Probabilistic Sharpe Ratio │ 46.228%          │ Return                      │ 112.28 %       │
+│ Unrealized                 │ $8,121.27        │ Volume                      │ $63,020,728.00 │
 ├────────────────────────────┼──────────────────┼─────────────────────────────┼────────────────┤
-│ Total Orders               │ 676              │ Average Win                 │ 0.47%          │
-│ Average Loss               │ -1.62%           │ Compounding Annual Return   │ 70.413%        │
+│ Total Orders               │ 678              │ Average Win                 │ 0.47%          │
+│ Average Loss               │ -1.62%           │ Compounding Annual Return   │ 69.969%        │
 │ Drawdown                   │ 43.400%          │ Expectancy                  │ 0.171          │
-│ Start Equity               │ 300000           │ End Equity                  │ 636407.32      │
-│ Net Profit                 │ 112.136%         │ Sharpe Ratio                │ 1.119          │
-│ Sortino Ratio              │ 1.364            │ Probabilistic Sharpe Ratio  │ 46.372%        │
+│ Start Equity               │ 300000           │ End Equity                  │ 636839.76      │
+│ Net Profit                 │ 112.280%         │ Sharpe Ratio                │ 1.114          │
+│ Sortino Ratio              │ 1.355            │ Probabilistic Sharpe Ratio  │ 46.228%        │
 │ Loss Rate                  │ 9%               │ Win Rate                    │ 91%            │
 │ Profit-Loss Ratio          │ 0.29             │ Alpha                       │ 0              │
-│ Beta                       │ 0                │ Annual Standard Deviation   │ 0.533          │
-│ Annual Variance            │ 0.284            │ Information Ratio           │ 1.222          │
-│ Tracking Error             │ 0.533            │ Treynor Ratio               │ 0              │
-│ Total Fees                 │ $916.56          │ Estimated Strategy Capacity │ $300000000.00  │
-│ Lowest Capacity Asset      │ MNQ YTG30NVEFCW1 │ Portfolio Turnover          │ 26.16%         │
+│ Beta                       │ 0                │ Annual Standard Deviation   │ 0.531          │
+│ Annual Variance            │ 0.282            │ Information Ratio           │ 1.218          │
+│ Tracking Error             │ 0.531            │ Treynor Ratio               │ 0              │
+│ Total Fees                 │ $918.84          │ Estimated Strategy Capacity │ $990000000.00  │
+│ Lowest Capacity Asset      │ MNQ YTG30NVEFCW1 │ Portfolio Turnover          │ 26.06%         │
 └────────────────────────────┴──────────────────┴─────────────────────────────┴────────────────┘
 """

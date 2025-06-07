@@ -89,7 +89,7 @@ class LIGridBase(LITrading):
 
         self.gridBandingStartPrices = configs.get(LIConfigKey.gridBandingStartPrices, LIDefault.gridBandingStartPrices)
         self.gridBandingOpenFromPrices = configs.get(LIConfigKey.gridBandingOpenFromPrices, LIDefault.gridBandingOpenFromPrices)
-        self.gridBandingFixedStartBand = configs.get(LIConfigKey.gridBandingFixedStartBand, LIDefault.gridBandingFixedStartBand)
+        self.gridBandingLimitStartPrices = configs.get(LIConfigKey.gridBandingLimitStartPrices, LIDefault.gridBandingLimitStartPrices)
 
         self.gridLotMinQuantity = configs.get(LIConfigKey.gridLotMinQuantity, LIDefault.gridLotMinQuantity)
         self.gridLotLevelAmount = configs.get(LIConfigKey.gridLotLevelAmount, LIDefault.gridLotLevelAmount)
@@ -213,20 +213,36 @@ class LIGridBase(LITrading):
             if self.gridShortLots and not self.gridFixedOpenFromPrices.get(self.getGridShortSide()):
                 terminate(f"Please specify both {LIConfigKey.gridShortLots} and {LIConfigKey.gridFixedOpenFromPrices}[{self.getGridShortSide()}]!")
         if self.gridBandingStartPrices:
+            if self.gridLongLots and not self.gridBandingStartPrices.get(self.getGridLongSide()):
+                terminate(f"Please specify both {LIConfigKey.gridLongLots} and {LIConfigKey.gridBandingStartPrices}[{self.getGridLongSide()}]!")
+            if self.gridShortLots and not self.gridBandingStartPrices.get(self.getGridShortSide()):
+                terminate(f"Please specify both {LIConfigKey.gridShortLots} and {LIConfigKey.gridBandingStartPrices}[{self.getGridShortSide()}]!")
             if self.gridRetainOpenedLots:
                 terminate(f"Please remove {LIConfigKey.gridRetainOpenedLots} as {LIConfigKey.gridBandingStartPrices}={self.gridBandingStartPrices}.")
-            if self.gridFixedStartPrices or self.gridLimitStartPrices:
-                terminate(f"Please remove {LIConfigKey.gridFixedStartPrices} or {LIConfigKey.gridLimitStartPrices} "
-                          f"as {LIConfigKey.gridBandingStartPrices}={self.gridBandingStartPrices}.")
+            if self.gridFixedStartPrices:
+                terminate(f"Please remove {LIConfigKey.gridFixedStartPrices} as {LIConfigKey.gridBandingStartPrices}={self.gridBandingStartPrices}.")
             if not self.bollingerBandsParams:
                 terminate(f"Please specify {LIConfigKey.bollingerBandsParams} as {LIConfigKey.gridBandingStartPrices}={self.gridBandingStartPrices}.")
         if self.gridBandingOpenFromPrices:
+            if self.gridLongLots and not self.gridBandingOpenFromPrices.get(self.getGridLongSide()):
+                terminate(f"Please specify both {LIConfigKey.gridLongLots} and {LIConfigKey.gridBandingOpenFromPrices}[{self.getGridLongSide()}]!")
+            if self.gridShortLots and not self.gridBandingOpenFromPrices.get(self.getGridShortSide()):
+                terminate(f"Please specify both {LIConfigKey.gridShortLots} and {LIConfigKey.gridBandingOpenFromPrices}[{self.getGridShortSide()}]!")
             if self.isMomentumMode() and self.gridFixedStartPrices:
                 terminate(f"Please remove {LIConfigKey.gridFixedStartPrices} as {LIConfigKey.gridBandingOpenFromPrices}={self.gridBandingOpenFromPrices}!")
             elif self.isContrarianMode() and not self.gridBandingStartPrices:
                 terminate(f"Please specify {LIConfigKey.gridBandingStartPrices} as {LIConfigKey.gridBandingOpenFromPrices}={self.gridBandingOpenFromPrices}!")
             if not self.bollingerBandsParams:
                 terminate(f"Please specify {LIConfigKey.bollingerBandsParams} as {LIConfigKey.gridBandingOpenFromPrices}={self.gridBandingOpenFromPrices}!")
+        if self.gridBandingLimitStartPrices:
+            if self.gridLongLots and not self.gridBandingLimitStartPrices.get(self.getGridLongSide()):
+                terminate(f"Please specify both {LIConfigKey.gridLongLots} and {LIConfigKey.gridBandingLimitStartPrices}[{self.getGridLongSide()}]!")
+            if self.gridShortLots and not self.gridBandingLimitStartPrices.get(self.getGridShortSide()):
+                terminate(f"Please specify both {LIConfigKey.gridShortLots} and {LIConfigKey.gridBandingLimitStartPrices}[{self.getGridShortSide()}]!")
+            if self.gridLimitStartPrices:
+                terminate(f"Please remove {LIConfigKey.gridLimitStartPrices} as {LIConfigKey.gridBandingLimitStartPrices}={self.gridBandingLimitStartPrices}!")
+            if not self.bollingerBandsParams:
+                terminate(f"Please specify {LIConfigKey.bollingerBandsParams} as {LIConfigKey.gridBandingLimitStartPrices}={self.gridBandingLimitStartPrices}!")
         if self.gridTransfer2Counterpart:
             if self.tradeBothSides() and self.gridLongLots != self.gridShortLots:
                 terminate(f"Please make sure {LIConfigKey.gridLongLots}=={LIConfigKey.gridShortLots} "
@@ -304,10 +320,21 @@ class LIGridBase(LITrading):
         if self.stochasticComboParams:
             self.stochasticComboIndicator = self.getStochasticComboIndicator(self.signalSymbolMonitor, self.positionManager)
             self.stochasticComboIndicator.subscribeTradeInsight(self)
-        if self.gridBandingFixedStartBand:
-            if not self.bollingerBandsIndicator.getBand(self.gridBandingFixedStartBand):
-                terminate(f"Not found {LIConfigKey.gridBandingFixedStartBand}={self.gridBandingFixedStartBand} in "
-                          f"{self.bollingerBandsIndicator.getBandNames()}!")
+        if self.gridBandingStartPrices:
+            for bandName in self.gridBandingStartPrices.values():
+                if not self.bollingerBandsIndicator.getBand(bandName):
+                    terminate(f"Not found {LIConfigKey.gridBandingStartPrices}={self.gridBandingStartPrices} in "
+                              f"{self.bollingerBandsIndicator.getBandNames()}!")
+        if self.gridBandingOpenFromPrices:
+            for bandName in self.gridBandingOpenFromPrices.values():
+                if not self.bollingerBandsIndicator.getBand(bandName):
+                    terminate(f"Not found {LIConfigKey.gridBandingOpenFromPrices}={self.gridBandingOpenFromPrices} in "
+                              f"{self.bollingerBandsIndicator.getBandNames()}!")
+        if self.gridBandingLimitStartPrices:
+            for bandName in self.gridBandingLimitStartPrices.values():
+                if not self.bollingerBandsIndicator.getBand(bandName):
+                    terminate(f"Not found {LIConfigKey.gridBandingLimitStartPrices}={self.gridBandingLimitStartPrices} in "
+                              f"{self.bollingerBandsIndicator.getBandNames()}!")
 
         if self.isMomentumMode():
             getAlgo().SetTradeBuilder(TradeBuilder(FillGroupingMethod.FillToFill, FillMatchingMethod.FIFO))
@@ -414,6 +441,12 @@ class LIGridBase(LITrading):
             insightIndicator = LIStochasticComboIndicator(securityMonitor, positionManager, self.mainChart, self.configs)
             self.insightIndicators[symbolKey] = insightIndicator
         return insightIndicator
+
+    def getTierFactorIndex(self):
+        tierIndex = int(self.tradingTierName.split("-")[1][1:])
+        bandCounts = self.bollingerBandsIndicator.countBands()
+        tierFactorIndex = (bandCounts[1] - tierIndex) if ("upper" in self.tradingTierName) else (bandCounts[0] - bandCounts[1] + tierIndex)
+        return tierFactorIndex
 
     @deprecated(reason="Use cancelActiveOrders() and resubmit order tickets instead.")
     def assignOpenOrderTickets(self):
@@ -533,7 +566,6 @@ class LIGridBase(LITrading):
         self.gridMetadata[LIMetadataKey.gridMode] = self.gridMode
         self.gridMetadata[LIMetadataKey.sessionId] = self.sessionId
         self.gridMetadata[LIMetadataKey.startPrices] = self.gridStartPrices
-        # self.gridMetadata[LIMetadataKey.boundaryPrices] = self.gridBoundaryPrices # Not available yet!
         self.gridMetadata[LIMetadataKey.investedQuantity] = self.getInvestedQuantity()
         self.gridMetadata[LIMetadataKey.stoppedLossPrices] = self.stoppedLossPrices
         self.gridMetadata[LIMetadataKey.closedTradesCount] = self.closedTradesCount
@@ -573,7 +605,6 @@ class LIGridBase(LITrading):
         if not postRollover:
             self.sessionId = self.gridMetadata.get(LIMetadataKey.sessionId, 1)
         self.gridStartPrices = self.gridMetadata.get(LIMetadataKey.startPrices, {})
-        # self.gridBoundaryPrices = self.gridMetadata.get(LIMetadataKey.boundaryPrices, {}) # Not available yet!
         self.stoppedLossPrices = self.gridMetadata.get(LIMetadataKey.stoppedLossPrices, 0.0)
         self.closedTradesCount = self.gridMetadata.get(LIMetadataKey.closedTradesCount, 0)
         self.realizedProfitLoss = self.gridMetadata.get(LIMetadataKey.realizedProfitLoss, 0.0)
@@ -656,6 +687,57 @@ class LIGridBase(LITrading):
                 alert(f"{self.getNotifyPrefix()}: Failed to reset start prices as not able to get market price!")
         log(f"{self.getSymbolAlias()}: Reset grid start prices: {self.printGridPrices()}, marketPrice={self.getMarketPrice()}", self.verbose)
         # self.manageGridStartPrices() # DO NOT CALL THIS!
+
+    def manageDCABuyAndHold(self, bar):
+        if not self.isBuyAndHoldMode():
+            return  # Abort
+
+        if self.gridNoMoreOpenOrders:
+            log(f"{self.getSymbolAlias()}: Abort placing open order ticket as {LIConfigKey.gridNoMoreOpenOrders}={self.gridNoMoreOpenOrders}", self.verbose)
+            return False  # Abort, no more open orders!
+
+        if not self.positionManager.isExchangeOpen():
+            return  # Abort, wait for market open!
+
+        # Check whether it's time to restart the grid session
+        startPrice = self.gridStartPrices[self.getGridLongSide()]
+        if not self.dcaMaxStartPrice:
+            self.dcaMaxStartPrice = startPrice
+            self.dcaInvestQuantity = self.getInvestedQuantity()
+        elif self.dcaMaxStartPrice < startPrice:
+            openingQuantity = self.getOpeningQuantity()
+            if openingQuantity > 0:
+                notify(f"{self.getNotifyPrefix()}: Restart grid session upon getting a higher start price from {self.dcaMaxStartPrice} to {startPrice}, "
+                       f"and add openingQuantity={openingQuantity} into dcaHoldingQuantity={self.dcaHoldingQuantity}, "
+                       f"dcaLastInvestedDate={printFullTime(self.dcaLastInvestedDate)}.")
+                self.dcaMaxStartPrice = startPrice
+                self.dcaHoldingQuantity = self.getInvestedQuantity()
+                self.restartGridSession(reason="Getting a higher start price")
+        # Check whether it's time to fill a regular investment
+        algoTime = bar.EndTime if bar else getAlgo().Time
+        if isActiveTradingTime(algoTime) and (self.getInvestedQuantity() == 0 or (self.dcaLastInvestedDate + self.getPeriodicityTimedelta()) < algoTime):
+            targetQuantity = self.dcaInvestCapital / self.getMarketPrice(bar) if self.dcaInvestCapital else self.dcaInvestQuantity
+            targetQuantity = self.positionManager.roundSecuritySize(targetQuantity)
+            tradeOrder = LITradeOrder(quantity=targetQuantity)
+            tradeInsight = LITradeInsight(signalType=LISignalType.LONG, targetPrice=self.getMarketPrice(bar), tradeOrderSet={tradeOrder})
+            if self.positionManager.onEmitTradeInsight(tradeInsight):
+                self.dcaLastInvestedDate = algoTime
+                # Fulfill a regular investment and continue
+                self.dcaHoldingQuantity = self.getInvestedQuantity() - self.getOpeningQuantity()
+                self.storeGridMetadata(logging=True)
+                dcaInvestMsg = f"dcaInvestCapital={self.dcaInvestCapital}" if self.dcaInvestCapital else f"dcaInvestQuantity={self.dcaInvestQuantity}"
+                notify(f"{self.getNotifyPrefix()}: Fulfilled a regular investment: "
+                       f"marketPrice={self.getMarketPrice(bar)}, targetQuantity={targetQuantity}, openingQuantity={self.getOpeningQuantity()}, "
+                       f"{dcaInvestMsg}, dcaLastInvestedDate={printFullTime(self.dcaLastInvestedDate)}, "
+                       f"dcaHoldingQuantity={self.dcaHoldingQuantity}")
+                # Fulfill a regular investment and restart session
+                # self.dcaHoldingQuantity = self.getInvestedQuantity()
+                # dcaInvestMsg = f"dcaInvestCapital={self.dcaInvestCapital}" if self.dcaInvestCapital else f"dcaInvestQuantity={self.dcaInvestQuantity}"
+                # notify(f"{self.getNotifyPrefix()}: Fulfilled a regular investment: "
+                #        f"marketPrice={self.getMarketPrice(bar)}, targetQuantity={targetQuantity}, openingQuantity={self.getOpeningQuantity()}, "
+                #        f"{dcaInvestMsg}, dcaLastInvestedDate={printFullTime(self.dcaLastInvestedDate)}, "
+                #        f"dcaHoldingQuantity={self.dcaHoldingQuantity}. And restart grid session.")
+                # self.restartGridSession()
 
     def monitorRiskManagement(self):
         if not self.riskProposeHedgeInsights:

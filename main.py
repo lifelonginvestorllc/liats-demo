@@ -27,7 +27,7 @@ class LifelongInvestorMain(LIAlgorithm):
 
         self.futureGridTrading_Contrarian_Nasdaq()
         # self.futureGridTrading_Contrarian_Euro()
-        self.futureGridTrading_Contrarian_Oil()
+        # self.futureGridTrading_Contrarian_Oil()
 
         # self.futureGridTrading_Euro_Momentum()
         # self.futureGridTrading_Euro_Contrarian_Agile()
@@ -74,52 +74,50 @@ class LifelongInvestorMain(LIAlgorithm):
 
     def futureGridTrading_Contrarian_Nasdaq(self):
         self.SetCash(300_000)
-        # 2021 annual performance: short(328/-71.86%/-85.2%); long(313/101.89%/-26.8%)
+        # 2021 annual performance: short(328/-71.86%/-85.2%); long(313/101.89%/-26.8%) -> (368/112.99%/-19.2%)
         # self.SetStartDate(date(2021, 1, 1))
         # self.SetEndDate(date(2021, 12, 31))
-        # 2022 annual performance: short(1035/90.41%/-35.3%); long(386/-86.43%/-90.1%)
+        # 2022 annual performance: short(1035/90.41%/-35.3%); long(386/-86.43%/-90.1%) -> (172/-99.17%/-99.2%) # Must set stop loss!
         # self.SetStartDate(date(2022, 1, 1))
         # self.SetEndDate(date(2022, 12, 31))
-        # 2023 annual performance: short(253/-89.81%/-94.8%); long(364/108.3%/-19.8%)
+        # 2023 annual performance: short(253/-89.81%/-94.8%); long(364/108.3%/-19.8%) -> (465/80.67%/-26.6%)
         # self.SetStartDate(date(2023, 1, 1))
         # self.SetEndDate(date(2023, 12, 31))
-        # 2024 annual performance: short(274/-15.16%/-62.2%); long(324/78.27%/-50.9%)
-        # self.SetStartDate(date(2024, 1, 1))
-        self.SetStartDate(date(2025, 2, 19))
-        self.SetEndDate(date(2025, 3, 25))
-        # self.SetEndDate(date(2024, 12, 31))
-        self.SetStartDate(date(2025, 3, 25))
-        self.SetEndDate(date(2025, 6, 1))
+        # 2024 annual performance: short(274/-15.16%/-62.2%); long(324/78.27%/-50.9%) -> (401/98.05%/-35.3%)
+        self.SetStartDate(date(2024, 1, 1))
+        self.SetEndDate(date(2024, 12, 31))
+        # 2025 annual performance:
+        # self.SetStartDate(date(2025, 1, 1))
+        # self.SetEndDate(date(2025, 12, 31))
         # self.SetStartDate(datetime.now() - timedelta(days=365))
         # self.SetEndDate(datetime.now())
 
         # Summary: Based on last 4 years performance, still need to predict bearish/bullish market
 
-        amplifier = 1  # Amplify invest amount by n times!
+        amplifier = 2  # Amplify invest amount by n times!
         configs = {
             LIConfigKey.aliasName: "NasdaqTrail",
-            LIConfigKey.monitorPeriod: 5 * 3,
-            # LIConfigKey.monitorPeriod: 1,
-            # LIConfigKey.resolution: LIResolution.HOUR,
+            # LIConfigKey.monitorPeriod: 5 * 3,  # Quicker response to market
+            LIConfigKey.monitorPeriod: 1,  # Better in a long run!
+            LIConfigKey.resolution: LIResolution.HOUR,
             # LIConfigKey.futureContractExpiry: date(2025, 6, 20),
             # LIConfigKey.closeWithStopOrderType: True,
             # LIConfigKey.openWithMarketOrderType: False,
             # LIConfigKey.closeWithMarketOrderType: False,
             # Better to liquidate at some point to exit one side of trading
-            LIConfigKey.liquidateOnStopLossAmount: 20_000 * amplifier,  # 100_000 * amplifier,
+            LIConfigKey.liquidateOnStopLossAmount: 100_000 * amplifier,  # 100_000 * amplifier,
             # LIConfigKey.liquidateLossAndLimitTrading: True,
-            LIConfigKey.liquidateLossAndRestartTrading: True,
-            # Adjust it dynamically based on current market trend/volatility and paired strategy's profit loss!
+            LIConfigKey.liquidateLossAndRestartTrading: False,
             LIConfigKey.liquidateOnTakeProfitAmount: 50_000 * amplifier,  # 50_000 * amplifier,
             # LIConfigKey.gridNoMoreOpenOrders: True,
             LIConfigKey.gridLongLots: 20,
-            # LIConfigKey.gridShortLots: 20, # Never short for Nasdaq!
+            # LIConfigKey.gridShortLots: 20, # Not short for Nasdaq!
             LIConfigKey.gridLotLevelPercent: 0.6,  # 0.60,
             LIConfigKey.gridLotLevelAugment: 0.015,  # Perform better in a long run with volatile market
             LIConfigKey.gridLotStopLossFactor: 25,
             LIConfigKey.gridLotStopProfitFactors: (0.5, 2),
-            LIConfigKey.gridLotPauseAfterStopLoss: False,
-            LIConfigKey.gridRestartIfAllLotsPaused: False,
+            # LIConfigKey.gridLotPauseAfterStopLoss: False,
+            # LIConfigKey.gridRestartIfAllLotsPaused: False,
             LIConfigKey.gridCancelOrdersAfterClosed: True,
             LIConfigKey.gridTrailingOpenPriceFactor: 1.0,  # Fill back open orders eagerly! Enable for clear market trend!
             # LIConfigKey.gridRetainOpenedLots: 2,
@@ -127,10 +125,13 @@ class LifelongInvestorMain(LIAlgorithm):
             # LIConfigKey.gridHedgeEnabled: True,
             # LIConfigKey.gridHedgeOverLosingLots: 5,
             # LIConfigKey.gridFollowAdverseTrend: True,
-            # LIConfigKey.gridBandingStartPrices: True,
-            # LIConfigKey.gridBandingFixedStartBand: "band-#2-upper",  # (282/138.59%/-41.4%)
+            # LIConfigKey.gridBandingStartPrices: {LIGridSide.BTD: "band-#0-middle", LIGridSide.STU: "band-#0-middle"},
+            # LIConfigKey.gridBandingOpenFromPrices: {LIGridSide.BTD: "band-#1-lower", LIGridSide.STU: "band-#1-upper"},
+            # LIConfigKey.gridBandingLimitStartPrices: {LIGridSide.BTD: "band-#2-upper", LIGridSide.STU: "band-#2-lower"},
             # LIConfigKey.bollingerBandsParams: [(300, 1), (300, 2), (300, 3)],
-            # LIConfigKey.investAmountTierFactors: [0, 1, 2, 3, 4, 5, 6, 7],  # Mapping band tiers from upper to lower
+            # LIConfigKey.investAmountTierFactors: [0, 0, 1, 1, 0, 0, 0, 0],  # Only do trading within specified bands (122/-27.91%/-36.30%)
+            # LIConfigKey.monitorPeriodTierFactors: [1, 1, 1, 1, 4, 4, 4, 4],  # Mapping band tiers from upper to lower
+            # LIConfigKey.takeProfitAmountTierFactors: [1, 1, 1, 0.1, 0.1, 0.1, 0.1, 0.1],  # Take profit ASAP when approaching specified bands
             LIConfigKey.gridInitializeSession: True,  # Be careful!
         }
         investAmount = LIInvestAmount(lotQuantity=1 * amplifier)
@@ -173,8 +174,8 @@ class LifelongInvestorMain(LIAlgorithm):
             # LIConfigKey.gridInitOpenedLots: 2,
             # LIConfigKey.gridFixedStartPrices: {LIGridSide.BTD: 1.075, LIGridSide.STU: 1.075},
             # LIConfigKey.gridFixedStartPrices: {LIGridSide.BTD: 1.08, LIGridSide.STU: 1.08},
-            LIConfigKey.gridBandingStartPrices: True,
-            LIConfigKey.gridBandingOpenFromPrices: True,
+            LIConfigKey.gridBandingStartPrices: {LIGridSide.BTD: "band-#0-middle", LIGridSide.STU: "band-#0-middle"},
+            LIConfigKey.gridBandingOpenFromPrices: {LIGridSide.BTD: "band-#1-lower", LIGridSide.STU: "band-#1-upper"},
             # LIConfigKey.bollingerBandsParams: [(300, 0)],
             LIConfigKey.bollingerBandsParams: [(300, 1.25)],
             # LIConfigKey.gridResetLotsMetadata: True,
@@ -229,8 +230,8 @@ class LifelongInvestorMain(LIAlgorithm):
             # LIConfigKey.gridFixedStartPrices: {LIGridSide.BTD: 75.67, LIGridSide.STU: 75.67},
             # LIConfigKey.gridFixedOpenFromPrices: {LIGridSide.BTD: 69.64, LIGridSide.STU: 81.70},
             # Enable banding open from price for both sides contrarian
-            LIConfigKey.gridBandingStartPrices: True,
-            LIConfigKey.gridBandingOpenFromPrices: True,
+            LIConfigKey.gridBandingStartPrices: {LIGridSide.BTD: "band-#0-middle", LIGridSide.STU: "band-#0-middle"},
+            LIConfigKey.gridBandingOpenFromPrices: {LIGridSide.BTD: "band-#1-lower", LIGridSide.STU: "band-#1-upper"},
             LIConfigKey.bollingerBandsParams: [(365, 1.25)],
             LIConfigKey.gridInitializeSession: True,  # Be careful!
         }
@@ -280,7 +281,7 @@ class LifelongInvestorMain(LIAlgorithm):
             LIConfigKey.gridLotTakeProfitFactor: 25,
             LIConfigKey.gridLotPauseAfterProfit: False,
             # LIConfigKey.gridFixedOpenFromPrices: {LIGridSide.STD: 40, LIGridSide.BTU: 100},
-            LIConfigKey.gridBandingOpenFromPrices: True,
+            LIConfigKey.gridBandingOpenFromPrices: {LIGridSide.BTD: "band-#1-lower", LIGridSide.STU: "band-#1-upper"},
             LIConfigKey.bollingerBandsParams: [(365, 2)],
             LIConfigKey.gridInitializeSession: True,  # Be careful!
         }
@@ -391,8 +392,8 @@ class LifelongInvestorMain(LIAlgorithm):
             # LIConfigKey.gridFixedOpenFromPrices: {LIGridSide.BTD: 72, LIGridSide.STU: 82},
             # LIConfigKey.gridFixedStartPrices: {LIGridSide.BTD: 76, LIGridSide.STU: 76},
             # LIConfigKey.gridFixedOpenFromPrices: {LIGridSide.BTD: 71, LIGridSide.STU: 81},
-            LIConfigKey.gridBandingStartPrices: True,
-            LIConfigKey.gridBandingOpenFromPrices: True,
+            LIConfigKey.gridBandingStartPrices: {LIGridSide.BTD: "band-#0-middle", LIGridSide.STU: "band-#0-middle"},
+            LIConfigKey.gridBandingOpenFromPrices: {LIGridSide.BTD: "band-#1-lower", LIGridSide.STU: "band-#1-upper"},
             LIConfigKey.bollingerBandsParams: [(365, 1)],
             LIConfigKey.gridInitializeSession: True,
         }
@@ -458,10 +459,8 @@ class LifelongInvestorMain(LIAlgorithm):
             LIConfigKey.gridLotStopProfitFactors: (0.5, 2),
             # LIConfigKey.gridCloseCounterpartLots: False,
             # LIConfigKey.gridFixLeakingPositions: True,
-            LIConfigKey.gridBandingStartPrices: True,
-            LIConfigKey.gridBandingOpenFromPrices: True,
-            LIConfigKey.gridBandingFixedStartBand: "band-#2-upper",  # (100/15.13%/-6.40%)
-            # LIConfigKey.gridBandingFixedStartBand: "band-#0-middle",  # (101/-9.38%%/-25.10%)
+            LIConfigKey.gridBandingStartPrices: {LIGridSide.BTD: "band-#2-upper", LIGridSide.STU: "band-#2-upper"},
+            LIConfigKey.gridBandingOpenFromPrices: {LIGridSide.BTD: "band-#1-upper", LIGridSide.STU: "band-#3-upper"},
             LIConfigKey.bollingerBandsParams: [(300, 1, LIResolution.HOUR), (300, 2, LIResolution.HOUR), (300, 3, LIResolution.HOUR)],
             # LIConfigKey.marketBias: LIMarketBias.NEUTRAL,
             LIConfigKey.gridInitializeSession: True,
@@ -1296,8 +1295,8 @@ class LifelongInvestorMain(LIAlgorithm):
             LIConfigKey.gridLotPauseAfterStopLoss: False,
             LIConfigKey.gridCancelOrdersAfterClosed: True,
             # LIConfigKey.gridTrailingOpenPriceFactor: 1.0,
-            # LIConfigKey.gridBandingStartPrices: True,
-            # LIConfigKey.gridBandingOpenFromPrices: True,
+            # LIConfigKey.gridBandingStartPrices: {LIGridSide.BTD: "band-#0-middle", LIGridSide.STU: "band-#0-middle"},
+            # LIConfigKey.gridBandingOpenFromPrices: {LIGridSide.BTD: "band-#1-lower", LIGridSide.STU: "band-#1-upper"},
             # LIConfigKey.bollingerBandsParams: [(365, 1)],
             # LIConfigKey.gridRetainOpenedLots: 3,
             # LIConfigKey.gridRealignOpenPositions: True,
@@ -1485,8 +1484,8 @@ class LifelongInvestorMain(LIAlgorithm):
             LIConfigKey.gridLotPauseAfterStopLoss: False,
             # LIConfigKey.gridLotBoostingProfitFactor: 3,  # Perform even worse in a long run with stable rising index futures
             # LIConfigKey.gridBoostingMaxHoldQuantity: 50,
-            # LIConfigKey.gridBandingStartPrices: True,
-            # LIConfigKey.gridBandingOpenFromPrices: True,
+            # LIConfigKey.gridBandingStartPrices: {LIGridSide.BTD: "band-#0-middle", LIGridSide.STU: "band-#0-middle"},
+            # LIConfigKey.gridBandingOpenFromPrices: {LIGridSide.BTD: "band-#1-lower", LIGridSide.STU: "band-#1-upper"},
             # LIConfigKey.bollingerBandsParams: [(365, 1)],
             # LIConfigKey.gridRetainOpenedLots: 3,
             # LIConfigKey.gridRealignOpenPositions: True,
@@ -1566,9 +1565,8 @@ class LifelongInvestorMain(LIAlgorithm):
             # LIConfigKey.gridResetLotsMetadata: True,
             # LIConfigKey.gridCloseCounterpartLots: False,
             # LIConfigKey.gridFixedStartPrices: {LIGridSide.BTD: 1.075, LIGridSide.STU: 1.075},  # Based on QuantConnect
-            LIConfigKey.gridBandingStartPrices: True,
-            # LIConfigKey.gridBandingOpenFromPrices: True,
-            LIConfigKey.gridBandingFixedStartBand: "band-#0-middle",
+            LIConfigKey.gridBandingStartPrices: {LIGridSide.BTD: "band-#0-middle", LIGridSide.STU: "band-#0-middle"},
+            # LIConfigKey.gridBandingOpenFromPrices: {LIGridSide.BTD: "band-#1-lower", LIGridSide.STU: "band-#1-upper"},
             LIConfigKey.bollingerBandsParams: [(300, 1), (300, 2), (300, 3)],
             LIConfigKey.investAmountTierFactors: [4, 3, 2, 1, 1, 2, 3, 4],  # Mapping band tiers from upper to lower
             LIConfigKey.gridInitializeSession: True,  # Be careful!
@@ -1609,8 +1607,8 @@ class LifelongInvestorMain(LIAlgorithm):
             # LIConfigKey.gridInitOpenedLots: 2,
             LIConfigKey.gridFixedStartPrices: {LIGridSide.BTD: 1.075, LIGridSide.STU: 1.075},
             # LIConfigKey.gridFixedStartPrices: {LIGridSide.BTD: 1.08, LIGridSide.STU: 1.08},
-            # LIConfigKey.gridBandingStartPrices: True,
-            # LIConfigKey.gridBandingOpenFromPrices: True,
+            # LIConfigKey.gridBandingStartPrices: {LIGridSide.BTD: "band-#0-middle", LIGridSide.STU: "band-#0-middle"},
+            # LIConfigKey.gridBandingOpenFromPrices: {LIGridSide.BTD: "band-#1-lower", LIGridSide.STU: "band-#1-upper"},
             # LIConfigKey.bollingerBandsParams: [(300, 0)], # [(365, 1)]
             # LIConfigKey.gridResetLotsMetadata: True,
             # LIConfigKey.gridRealignOpenPositions: True,
@@ -1653,8 +1651,8 @@ class LifelongInvestorMain(LIAlgorithm):
             # LIConfigKey.gridInitOpenedLots: 2,
             # LIConfigKey.gridFixedStartPrices: {LIGridSide.BTD: 1.075, LIGridSide.STU: 1.075},
             # LIConfigKey.gridFixedStartPrices: {LIGridSide.BTD: 1.08, LIGridSide.STU: 1.08},
-            # LIConfigKey.gridBandingStartPrices: True,
-            # LIConfigKey.gridBandingOpenFromPrices: True,
+            # LIConfigKey.gridBandingStartPrices: {LIGridSide.BTD: "band-#0-middle", LIGridSide.STU: "band-#0-middle"},
+            # LIConfigKey.gridBandingOpenFromPrices: {LIGridSide.BTD: "band-#1-lower", LIGridSide.STU: "band-#1-upper"},
             # LIConfigKey.bollingerBandsParams: [(300, 0)], # [(365, 1)]
             # LIConfigKey.gridResetLotsMetadata: True,
             # LIConfigKey.gridRealignOpenPositions: True,
@@ -1695,8 +1693,8 @@ class LifelongInvestorMain(LIAlgorithm):
             # LIConfigKey.gridInitOpenedLots: 2,
             # LIConfigKey.gridResetLotsMetadata: True,
             # LIConfigKey.gridRealignOpenPositions: True,
-            LIConfigKey.gridBandingStartPrices: True,
-            LIConfigKey.gridBandingOpenFromPrices: True,
+            LIConfigKey.gridBandingStartPrices: {LIGridSide.BTD: "band-#0-middle", LIGridSide.STU: "band-#0-middle"},
+            LIConfigKey.gridBandingOpenFromPrices: {LIGridSide.BTD: "band-#1-lower", LIGridSide.STU: "band-#1-upper"},
             # LIConfigKey.bollingerBandsParams: [(200, 2, LIResolution.HOUR)],
             LIConfigKey.bollingerBandsParams: [(300, 2, LIResolution.HOUR)],  # 245/55.67%/-34.60%
             # LIConfigKey.bollingerBandsParams: [(400, 2, LIResolution.HOUR)],
@@ -1757,7 +1755,7 @@ class LifelongInvestorMain(LIAlgorithm):
             LIConfigKey.gridLotStopLossFactor: 40,
             LIConfigKey.gridLotTakeProfitFactor: 20,
             LIConfigKey.gridLotPauseAfterProfit: False,
-            LIConfigKey.gridBandingOpenFromPrices: True,
+            LIConfigKey.gridBandingOpenFromPrices: {LIGridSide.BTD: "band-#1-lower", LIGridSide.STU: "band-#1-upper"},
             # LIConfigKey.bollingerBandsParams: [(365, 0)],  # 0 for bouncing in bands
             LIConfigKey.bollingerBandsParams: [(365, 1)],  # 1 for one side trending
             # LIConfigKey.bollingerBandsParams: [(365, 2)],  # 2 for up and down trending

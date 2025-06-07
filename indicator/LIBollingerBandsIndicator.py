@@ -19,7 +19,6 @@ class LIBollingerBandsIndicator(LIInsightIndicator):
         self.middleBandName = "band-#0-middle"
         self.verbose = configs.get(LIConfigKey.verbose, LIDefault.verbose)
         self.bollingerBandsParams = configs.get(LIConfigKey.bollingerBandsParams, LIDefault.bollingerBandsParams)
-        self.gridBandingFixedStartBand = configs.get(LIConfigKey.gridBandingFixedStartBand, LIDefault.gridBandingFixedStartBand)
 
         self.bollingerBandsList: list[BollingerBands] = []  # A list of original bollinger bands
         self.headBand: LIBollingerBand = None  # The top/upper/first bollinger band, double linked to other bands
@@ -152,12 +151,10 @@ class LIBollingerBandsIndicator(LIInsightIndicator):
         # self.dataConsolidator.Update(bar)
         self.updateRollingWindow(bar)
 
-        if not self.gridBandingFixedStartBand:
-            # No need to emit trade insights now!
-            tradeInsight = self.predictTradeInsight(bar.Time, bar)
-            if tradeInsight:
-                for listener in self.tradeInsightListeners:
-                    listener.onEmitTradeInsight(tradeInsight)
+        tradeInsight = self.predictTradeInsight(bar.Time, bar)
+        if tradeInsight:
+            for listener in self.tradeInsightListeners:
+                listener.onEmitTradeInsight(tradeInsight)
 
     def updateRollingWindow(self, bar: Bar):
         tradingBand = self.getTradingBand(bar.Close)

@@ -939,8 +939,6 @@ class LIGridTradingLot(LIGridBaseLot):
         result = f"startPrice={self.getStartPrice()}"
         if self.getOpenFromPrice():
             result += f", openFromPrice={self.getOpenFromPrice()}"
-        if self.getBoundaryPrice():
-            result += f", boundaryPrice={self.getBoundaryPrice()}"
         if self.gridTrading.bollingerBandsIndicator:
             result += f", bollingerBandPrices={self.gridTrading.bollingerBandsIndicator.getBandPrices()}"
         return result

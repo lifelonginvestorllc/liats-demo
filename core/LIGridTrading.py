@@ -380,9 +380,7 @@ class LIGridTrading(LIGridBase):
             targetQuantity = -targetQuantity
 
         if self.investAmountTierFactors:
-            tierIndex = int(self.tradingTierName.split("-")[1][1:])
-            bandCounts = self.bollingerBandsIndicator.countBands()
-            tierFactorIndex = (bandCounts[1] - tierIndex) if ("upper" in self.tradingTierName) else (bandCounts[0] - bandCounts[1] + tierIndex)
+            tierFactorIndex = self.getTierFactorIndex()
             targetQuantity *= self.investAmountTierFactors[tierFactorIndex]
 
         return targetQuantity
@@ -582,7 +580,7 @@ class LIGridTrading(LIGridBase):
         if self.isReadyToTrade:
             log(f"{self.getSymbolAlias()}: Received trade insight: {tradeInsight}")
             if tradeInsight.signalType == LISignalType.REALIGN:
-                if not self.gridBandingFixedStartBand:
+                if not self.gridBandingStartPrices:
                     self.startBandName = self.bollingerBandsIndicator.getStartBand().getName()
                     self.realignOpenPositions(forceOnDemand=True)
             if self.isBoostingMode():
@@ -624,8 +622,14 @@ class LIGridTrading(LIGridBase):
         if self.bollingerBandsIndicator:
             newTierName = self.bollingerBandsIndicator.getTradingTierName(targetPrice=marketPrice)
             if self.tradingTierName != newTierName:
-                log(f"{self.getNotifyPrefix()}: Migrated {LIMetadataKey.tradingTierName} from {self.tradingTierName} to {newTierName}.")
+                log(f"{self.getSymbolAlias()}: Switching {LIMetadataKey.tradingTierName} from {self.tradingTierName} to {newTierName}.")
                 self.tradingTierName = newTierName
+                if self.monitorPeriodTierFactors:
+                    tierFactorIndex = self.getTierFactorIndex()
+                    if self.gridLongLots:
+                        self.gridMonitorPeriodFactors = {self.getGridLongSide(): self.monitorPeriodTierFactors[tierFactorIndex]}
+                    if self.gridShortLots:
+                        self.gridMonitorPeriodFactors = {self.getGridShortSide(): self.monitorPeriodTierFactors[tierFactorIndex]}
 
         if self.isGridTradingPaused() or self.manageGridLiquidation(bar):
             self.positionManager.disableTempTradable()
@@ -999,13 +1003,18 @@ class LIGridTrading(LIGridBase):
             return self.liquidateOnStopLossAmount * self.getBaselineRatio()
 
     def getLiquidateOnTakeProfitAmount(self):
+        takeProfitAmount = 0
         if self.liquidateOnTakeProfitAmount:
-            return self.liquidateOnTakeProfitAmount * self.getBaselineRatio()
+            takeProfitAmount = self.liquidateOnTakeProfitAmount
         elif self.liquidateOnTakeProfitAmounts:
             if self.getInvestedQuantity() >= 0:
-                return self.liquidateOnTakeProfitAmounts[self.getGridLongSide()] * self.getBaselineRatio()
+                takeProfitAmount = self.liquidateOnTakeProfitAmounts[self.getGridLongSide()]
             else:
-                return self.liquidateOnTakeProfitAmounts[self.getGridShortSide()] * self.getBaselineRatio()
+                takeProfitAmount = self.liquidateOnTakeProfitAmounts[self.getGridShortSide()]
+        if self.takeProfitAmountTierFactors:
+            takeProfitAmount *= self.takeProfitAmountTierFactors[self.getTierFactorIndex()]
+        takeProfitAmount *= self.getBaselineRatio()
+        return takeProfitAmount
 
     def manageGridBoosting(self, bar=None, forceTrade=False):
         if forceTrade:
@@ -1407,9 +1416,9 @@ class LIGridTrading(LIGridBase):
         self.rolloverProfitLoss = self.gridRolloverCriteria[3]
         # Rollover holding positions
         if self.gridRolloverCriteria[2] > 0 and not self.positionManager.isInvested():  # Skip if already invested!
-            limitStopPrices = f", limitStopPrices={self.gridLimitStartPrices}" if self.gridLimitStartPrices else ""
+            limitStartPrices = f", limitStartPrices={self.gridLimitStartPrices}" if self.gridLimitStartPrices else ""
             fixedStartPrices = f", fixedStartPrices={self.gridFixedStartPrices}" if self.gridFixedStartPrices else ""
-            tagLog = f"Rolled over {self.gridRolloverCriteria} with marketPrice={self.getMarketPrice()}{limitStopPrices}{fixedStartPrices}"
+            tagLog = f"Rolled over {self.gridRolloverCriteria} with marketPrice={self.getMarketPrice()}{limitStartPrices}{fixedStartPrices}"
             orderTicket = self.positionManager.limitMarketOrder(self.gridRolloverCriteria[2], tagLog)
             retainStartPrices = self.manageGridStartPrices(retainOpenedLots=self.gridRolloverCriteria[1], filledMarketPrice=orderTicket.AverageFillPrice,
                                                            overwriteStartPrices=False)  # Keep tracking max/min start prices
@@ -1584,8 +1593,6 @@ class LIGridTrading(LIGridBase):
         result = f"startPrices={self.gridStartPrices}"
         if self.gridOpenFromPrices:
             result += f", openFromPrices={self.gridOpenFromPrices}"
-        if self.gridBoundaryPrices:
-            result += f", boundaryPrices={self.gridBoundaryPrices}"
         if self.bollingerBandsIndicator:
             result += f", bollingerBandPrices={self.bollingerBandsIndicator.getBandPrices()}"
         return result
@@ -1688,51 +1695,62 @@ class LIGridTrading(LIGridBase):
 
     def isLongSideActive(self) -> bool:
         if self.tradeBothSides():
+            isActive = True
+            gridSide = self.getGridLongSide()
             marketPrice = self.getMarketPrice()
-            if self.gridLimitStartPrices:
+            startPrice = self.getStartPrice(gridSide)
+            if startPrice:
                 if self.isMomentumMode():
-                    return marketPrice > self.gridLimitStartPrices[self.getGridLongSide()]
+                    isActive &= marketPrice > startPrice
                 elif self.isContrarianMode():
-                    return marketPrice < self.gridLimitStartPrices[self.getGridLongSide()]
-            elif self.gridFixedStartPrices:
+                    isActive &= marketPrice < startPrice
+            limitStartPrice = self.getLimitStartPrice(gridSide)
+            if limitStartPrice:
                 if self.isMomentumMode():
-                    return marketPrice > self.gridFixedStartPrices[self.getGridLongSide()]
+                    isActive &= marketPrice > limitStartPrice
                 elif self.isContrarianMode():
-                    return marketPrice < self.gridFixedStartPrices[self.getGridLongSide()]
-            elif self.gridBandingStartPrices:
-                if self.isMomentumMode():
-                    return marketPrice > self.getStartBollingerBand().getPrice()
-                elif self.isContrarianMode():
-                    return marketPrice < self.getStartBollingerBand().getPrice()
-            else:
-                return True
+                    isActive &= marketPrice < limitStartPrice
+            return isActive
         return self.gridLongLots
 
     def isShortSideActive(self) -> bool:
         if self.tradeBothSides():
-            if self.gridLimitStartPrices:
+            isActive = True
+            gridSide = self.getGridShortSide()
+            marketPrice = self.getMarketPrice()
+            startPrice = self.getStartPrice(gridSide)
+            if startPric:
                 if self.isMomentumMode():
-                    return self.getMarketPrice() < self.gridLimitStartPrices[self.getGridShortSide()]
+                    isActive &= marketPrice < startPrice
                 elif self.isContrarianMode():
-                    return self.getMarketPrice() > self.gridLimitStartPrices[self.getGridShortSide()]
-            elif self.gridFixedStartPrices:
+                    isActive &= marketPrice > startPrice
+            limitStartPrice = self.getLimitStartPrice(gridSide)
+            if limitStartPrice:
                 if self.isMomentumMode():
-                    return self.getMarketPrice() < self.gridFixedStartPrices[self.getGridShortSide()]
+                    isActive &= marketPrice < limitStartPrice
                 elif self.isContrarianMode():
-                    return self.getMarketPrice() > self.gridFixedStartPrices[self.getGridShortSide()]
-            elif self.gridBandingStartPrices:
-                if self.isMomentumMode():
-                    return self.getMarketPrice() < self.getStartBollingerBand().getPrice()
-                elif self.isContrarianMode():
-                    return self.getMarketPrice() > self.getStartBollingerBand().getPrice()
-            else:
-                return True
+                    isActive &= marketPrice > limitStartPrice
+            return isActive
         return self.gridShortLots
 
-    def getStartBollingerBand(self):
-        if self.gridBandingFixedStartBand:
-            return self.bollingerBandsIndicator.getBand(self.gridBandingFixedStartBand)
-        return self.bollingerBandsIndicator.getStartBand()
+    def getStartPrice(self, gridSide):
+        if self.gridFixedStartPrices:
+            return self.gridFixedStartPrices[gridSide]
+        elif self.gridBandingStartPrices:
+            return self.positionManager.roundSecurityPrice(self.bollingerBandsIndicator.getBand(self.gridBandingStartPrices[gridSide]).getPrice())
+        return self.positionManager.roundSecurityPrice(self.bollingerBandsIndicator.getStartBand().getPrice())
+
+    def getOpenFromPrice(self, gridSide: LIGridSide):
+        if self.gridFixedOpenFromPrices:
+            return self.gridFixedOpenFromPrices[gridSide]
+        elif self.gridBandingOpenFromPrices:
+            return self.positionManager.roundSecurityPrice(self.bollingerBandsIndicator.getBand(self.gridBandingOpenFromPrices[gridSide]).getPrice())
+
+    def getLimitStartPrice(self, gridSide: LIGridSide):
+        if self.gridLimitStartPrices:
+            return self.gridLimitStartPrices[gridSide]
+        elif self.gridBandingLimitStartPrices:
+            return self.positionManager.roundSecurityPrice(self.bollingerBandsIndicator.getBand(self.gridBandingLimitStartPrices[gridSide]).getPrice())
 
     def estimateFilledLots(self, investedQuantity):
         """Recalculate the filled lots based on market price or lot quantity."""
@@ -1967,60 +1985,46 @@ class LIGridTrading(LIGridBase):
                             f"from {startPrices} to {self.gridStartPrices}", self.verbose)
 
         # Apply fixed start prices if specified, means it won't follow/respect the market price
-        if self.gridFixedStartPrices:
+        if self.gridFixedStartPrices or self.gridBandingStartPrices:
             if retainStartPrices and not self.tradeBothSides():
                 notifyMsg = (f"{self.getNotifyPrefix()}: The retainOpenedLots={retainOpenedLots} requests to update "
                              f"{LIConfigKey.gridFixedStartPrices} as {self.gridStartPrices}, please adjust settings and redeploy or keep as it is!")
-                if self.gridLongLots and self.gridStartPrices[self.getGridLongSide()] != self.gridFixedStartPrices[self.getGridLongSide()]:
+                if self.gridLongLots and self.gridStartPrices[self.getGridLongSide()] != self.getStartPrice(self.getGridLongSide()):
                     notify(notifyMsg)
-                if self.gridShortLots and self.gridStartPrices[self.getGridShortSide()] != self.gridFixedStartPrices[self.getGridShortSide()]:
+                if self.gridShortLots and self.gridStartPrices[self.getGridShortSide()] != self.getStartPrice(self.getGridShortSide()):
                     notify(notifyMsg)
             else:
                 if self.gridLongLots:
-                    self.gridStartPrices[self.getGridLongSide()] = self.gridFixedStartPrices[self.getGridLongSide()]
+                    self.gridStartPrices[self.getGridLongSide()] = self.getStartPrice(self.getGridLongSide())
                 if self.gridShortLots:
-                    self.gridStartPrices[self.getGridShortSide()] = self.gridFixedStartPrices[self.getGridShortSide()]
+                    self.gridStartPrices[self.getGridShortSide()] = self.getStartPrice(self.getGridShortSide())
                 log(f"{self.getSymbolAlias()}: Set {LIConfigKey.gridStartPrices}={self.gridStartPrices} "
-                    f"as {LIConfigKey.gridFixedStartPrices}={self.gridFixedStartPrices}!", self.verbose)
+                    f"as {LIConfigKey.gridFixedStartPrices}={self.gridFixedStartPrices}, {LIConfigKey.gridBandingStartPrices}={self.gridBandingStartPrices}!",
+                    self.verbose)
 
         # Apply fixed open from prices if specified, means it will avoid opening order until reached this price
-        if self.gridFixedOpenFromPrices:
+        if self.gridFixedOpenFromPrices or self.gridBandingOpenFromPrices:
             if self.gridLongLots:
-                self.gridOpenFromPrices[self.getGridLongSide()] = self.gridFixedOpenFromPrices[self.getGridLongSide()]
+                self.gridOpenFromPrices[self.getGridLongSide()] = self.getOpenFromPrice(self.getGridLongSide())
             if self.gridShortLots:
-                self.gridOpenFromPrices[self.getGridShortSide()] = self.gridFixedOpenFromPrices[self.getGridShortSide()]
+                self.gridOpenFromPrices[self.getGridShortSide()] = self.getOpenFromPrice(self.getGridShortSide())
 
         # Apply boundary/stop prices if specified, means only retain opened lots within the boundary prices
-        if self.gridLimitStartPrices:
+        if self.gridLimitStartPrices or self.gridBandingLimitStartPrices:
             if retainStartPrices and not self.tradeBothSides():
                 notifyMsg = (f"{self.getNotifyPrefix()}: The retainOpenedLots={retainOpenedLots} requests to update "
                              f"{LIConfigKey.gridLimitStartPrices} as {self.gridStartPrices}, please adjust settings and redeploy or keep as it is!")
-                if self.gridLongLots and self.gridStartPrices[self.getGridLongSide()] > self.gridLimitStartPrices[self.getGridLongSide()]:
+                if self.gridLongLots and self.gridStartPrices[self.getGridLongSide()] > self.getLimitStartPrice(self.getGridLongSide()):
                     notify(notifyMsg)
-                if self.gridShortLots and self.gridStartPrices[self.getGridShortSide()] < self.gridLimitStartPrices[self.getGridShortSide()]:
+                if self.gridShortLots and self.gridStartPrices[self.getGridShortSide()] < self.getLimitStartPrice(self.getGridShortSide()):
                     notify(notifyMsg)
             else:
                 if self.gridLongLots:
                     self.gridStartPrices[self.getGridLongSide()] = min(self.gridStartPrices[self.getGridLongSide()],
-                                                                       self.gridLimitStartPrices[self.getGridLongSide()])
+                                                                       self.getLimitStartPrice(self.getGridLongSide()))
                 if self.gridShortLots:
                     self.gridStartPrices[self.getGridShortSide()] = max(self.gridStartPrices[self.getGridShortSide()],
-                                                                        self.gridLimitStartPrices[self.getGridShortSide()])
-                # log(f"Applied the specified gridLimitStartPrices={self.gridLimitStartPrices}!")
-
-        # Dynamically adjust start or open from prices according to the bollinger bands
-        if self.bollingerBandsIndicator:
-            startBand = self.getStartBollingerBand()
-            if self.gridBandingStartPrices:
-                if self.gridLongLots:
-                    self.gridStartPrices[self.getGridLongSide()] = self.positionManager.roundSecurityPrice(startBand.getPrice())
-                if self.gridShortLots:
-                    self.gridStartPrices[self.getGridShortSide()] = self.positionManager.roundSecurityPrice(startBand.getPrice())
-            if self.gridBandingOpenFromPrices:
-                if self.gridLongLots:
-                    self.gridOpenFromPrices[self.getGridLongSide()] = self.getOpenFromPrice(startBand, self.getGridLongSide())
-                if self.gridShortLots:
-                    self.gridOpenFromPrices[self.getGridShortSide()] = self.getOpenFromPrice(startBand, self.getGridShortSide())
+                                                                        self.getLimitStartPrice(self.getGridShortSide()))
 
         # Force fully filled grid lots to catch up with the adverse market trend
         if self.isContrarianMode() and self.gridFollowAdverseTrend:
@@ -2059,12 +2063,6 @@ class LIGridTrading(LIGridBase):
 
         return retainStartPrices
 
-    def getOpenFromPrice(self, bandStarter, gridSide: LIGridSide):
-        if gridSide == LIGridSide.STU or gridSide == LIGridSide.BTU:
-            return self.positionManager.roundSecurityPrice(bandStarter.prevBand.getPrice())
-        elif gridSide == LIGridSide.BTD or gridSide == LIGridSide.STD:
-            return self.positionManager.roundSecurityPrice(bandStarter.nextBand.getPrice())
-
     def updateGridSession(self, bar):
         # Dynamically adjusting starting prices to catch up with the market price!
         if (self.extendedMarketHours or isActiveMarketTime(getAlgo().Time) or
@@ -2097,57 +2095,6 @@ class LIGridTrading(LIGridBase):
         # Clean up work to do at the end of day!
         if atMarketCloseTime(delta=self.getMonitorPeriodDelta()):
             self.onCloseOfMarket()
-
-    def manageDCABuyAndHold(self, bar):
-        if not self.isBuyAndHoldMode():
-            return  # Abort
-
-        if self.gridNoMoreOpenOrders:
-            log(f"{self.getSymbolAlias()}: Abort placing open order ticket as {LIConfigKey.gridNoMoreOpenOrders}={self.gridNoMoreOpenOrders}", self.verbose)
-            return False  # Abort, no more open orders!
-
-        if not self.positionManager.isExchangeOpen():
-            return  # Abort, wait for market open!
-
-        # Check whether it's time to restart the grid session
-        startPrice = self.gridStartPrices[self.getGridLongSide()]
-        if not self.dcaMaxStartPrice:
-            self.dcaMaxStartPrice = startPrice
-            self.dcaInvestQuantity = self.getInvestedQuantity()
-        elif self.dcaMaxStartPrice < startPrice:
-            openingQuantity = self.getOpeningQuantity()
-            if openingQuantity > 0:
-                notify(f"{self.getNotifyPrefix()}: Restart grid session upon getting a higher start price from {self.dcaMaxStartPrice} to {startPrice}, "
-                       f"and add openingQuantity={openingQuantity} into dcaHoldingQuantity={self.dcaHoldingQuantity}, "
-                       f"dcaLastInvestedDate={printFullTime(self.dcaLastInvestedDate)}.")
-                self.dcaMaxStartPrice = startPrice
-                self.dcaHoldingQuantity = self.getInvestedQuantity()
-                self.restartGridSession(reason="Getting a higher start price")
-        # Check whether it's time to fill a regular investment
-        algoTime = bar.EndTime if bar else getAlgo().Time
-        if isActiveTradingTime(algoTime) and (self.getInvestedQuantity() == 0 or (self.dcaLastInvestedDate + self.getPeriodicityTimedelta()) < algoTime):
-            targetQuantity = self.dcaInvestCapital / self.getMarketPrice(bar) if self.dcaInvestCapital else self.dcaInvestQuantity
-            targetQuantity = self.positionManager.roundSecuritySize(targetQuantity)
-            tradeOrder = LITradeOrder(quantity=targetQuantity)
-            tradeInsight = LITradeInsight(signalType=LISignalType.LONG, targetPrice=self.getMarketPrice(bar), tradeOrderSet={tradeOrder})
-            if self.positionManager.onEmitTradeInsight(tradeInsight):
-                self.dcaLastInvestedDate = algoTime
-                # Fulfill a regular investment and continue
-                self.dcaHoldingQuantity = self.getInvestedQuantity() - self.getOpeningQuantity()
-                self.storeGridMetadata(logging=True)
-                dcaInvestMsg = f"dcaInvestCapital={self.dcaInvestCapital}" if self.dcaInvestCapital else f"dcaInvestQuantity={self.dcaInvestQuantity}"
-                notify(f"{self.getNotifyPrefix()}: Fulfilled a regular investment: "
-                       f"marketPrice={self.getMarketPrice(bar)}, targetQuantity={targetQuantity}, openingQuantity={self.getOpeningQuantity()}, "
-                       f"{dcaInvestMsg}, dcaLastInvestedDate={printFullTime(self.dcaLastInvestedDate)}, "
-                       f"dcaHoldingQuantity={self.dcaHoldingQuantity}")
-                # Fulfill a regular investment and restart session
-                # self.dcaHoldingQuantity = self.getInvestedQuantity()
-                # dcaInvestMsg = f"dcaInvestCapital={self.dcaInvestCapital}" if self.dcaInvestCapital else f"dcaInvestQuantity={self.dcaInvestQuantity}"
-                # notify(f"{self.getNotifyPrefix()}: Fulfilled a regular investment: "
-                #        f"marketPrice={self.getMarketPrice(bar)}, targetQuantity={targetQuantity}, openingQuantity={self.getOpeningQuantity()}, "
-                #        f"{dcaInvestMsg}, dcaLastInvestedDate={printFullTime(self.dcaLastInvestedDate)}, "
-                #        f"dcaHoldingQuantity={self.dcaHoldingQuantity}. And restart grid session.")
-                # self.restartGridSession()
 
     def onMonitorBarUpdated(self, bar):
         # Log or set break point for a particular date

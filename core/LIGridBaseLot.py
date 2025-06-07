@@ -269,10 +269,6 @@ class LIGridBaseLot:
         if self.gridTrading.gridOpenFromPrices:
             return self.gridTrading.gridOpenFromPrices[self.getGridSide()]
 
-    def getBoundaryPrice(self):
-        if self.gridTrading.gridBoundaryPrices:
-            return self.gridTrading.gridBoundaryPrices[self.getGridSide()]
-
     def getTicketPrice(self, orderTicket: OrderTicket):
         if orderTicket.OrderType == OrderType.StopLimit:
             return orderTicket.Get(OrderField.LimitPrice)

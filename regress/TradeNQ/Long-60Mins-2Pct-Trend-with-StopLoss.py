@@ -48,9 +48,6 @@ class LifelongInvestorMain(LIAlgorithm):
             LIConfigKey.gridLotStopProfitFactors: (0.5, 2),
             LIConfigKey.gridLotPauseAfterStopLoss: True,
             # LIConfigKey.gridTrailingOpenPriceFactor: 1.0,
-            # LIConfigKey.gridBandingStartPrices: True,
-            # LIConfigKey.gridBandingOpenFromPrices: True,
-            # LIConfigKey.bollingerBandsParams: [(365, 1)],
             LIConfigKey.gridRetainOpenedLots: 1,
             # LIConfigKey.gridRealignOpenPositions: True,
             LIConfigKey.gridInitializeSession: True,  # Be careful!

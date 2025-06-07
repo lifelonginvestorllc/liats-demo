@@ -265,6 +265,17 @@ class LISecurityMonitor:
         else:
             return self.futurePeriodDays + self.futureRolloverDays
 
+    def resetConsolidator(self, security):
+        if self.consolidators.get(security.Symbol) is not None:
+            consolidator = self.consolidators.pop(security.Symbol)
+            consolidator.DataConsolidated -= self.onDataConsolidated
+            getAlgo().SubscriptionManager.RemoveConsolidator(security.Symbol, consolidator)
+            log(f"Removed consolidator of the security: {security.Symbol.Value}")
+        consolidator = self.getConsolidator(self.monitorPeriod)
+        consolidator.DataConsolidated += self.onDataConsolidated
+        getAlgo().SubscriptionManager.AddConsolidator(security.Symbol, consolidator)
+        self.consolidators[security.Symbol] = consolidator
+
     def initSecurityMonitor(self, totalPeriods=0):
         if not self.fetchHistoryBarData and totalPeriods == 0:
             log(f"{self.getSymbolAlias()}: Skipped resetting security monitor as {LIConfigKey.fetchHistoryBarData}={self.fetchHistoryBarData}")
@@ -306,12 +317,7 @@ class LISecurityMonitor:
             security.SetMarginModel(SecurityMarginModel.Null)
             # security.SetBuyingPowerModel(BuyingPowerModel.Null)
 
-        consolidator = self.getConsolidator(self.monitorPeriod)
-
-        consolidator.DataConsolidated += self.onDataConsolidated
-        getAlgo().SubscriptionManager.AddConsolidator(security.Symbol, consolidator)
-        self.consolidators[security.Symbol] = consolidator
-
+        self.resetConsolidator(security)
         self.initSecurityMonitor()
 
         for (priority, listener) in self.securityChangedListeners:
