@@ -43,6 +43,11 @@ class LIGridTradingLot(LIGridBaseLot):
                 f"{LIConfigKey.gridNoMoreOpenOrders}={self.gridTrading.gridNoMoreOpenOrders}", self.verbose)
             return False  # Abort, no more open orders!
 
+        if (self.isLongLot() and self.gridTrading.isBearishBias()) or (self.isShortLot() and self.gridTrading.isBullishBias()):
+            log(f"f{self.getSymbolAlias()}@{self.getLotName()}: Abort placing open order ticket as "
+                f"{LIConfigKey.marketBias}={self.gridTrading.marketBias}", self.verbose)
+            return False  # Abort as against market bias
+
         if self.gridTrading.gridOpenFromPrices:
             if self.isMomentumMode() and not self.gridTrading.reachedOpenPrice:
                 log(f"{self.getSymbolAlias()}@{self.getLotName()}: Abort placing open order ticket as marketPrice={self.getMarketPrice()} not reached "
@@ -848,12 +853,12 @@ class LIGridTradingLot(LIGridBaseLot):
                 filledPrice = self.closeOrderTicket.AverageFillPrice if self.closeOrderTicket else orderEvent.FillPrice
                 filledQuantity = self.closeOrderTicket.QuantityFilled if self.closeOrderTicket else orderEvent.FillQuantity
                 profitLossPoints = self.getProfitLossPoints(filledPrice) if filledPrice else 0
-                profitLoss = round(profitLossPoints * abs(filledQuantity) * self.getSecurityMultiplier(), 2)
+                profitLoss = round(profitLossPoints * abs(filledQuantity) * self.getSecurityMultiplier(), LIGlobal.moneyPrecision)
                 self.accruedFees += orderEvent.OrderFee.Value.Amount
                 # Add up the lost points and reset it when profit points can cover the lost points at last!
                 self.accruedLostPoints = 0 if profitLossPoints >= self.accruedLostPoints else self.accruedLostPoints + abs(min(profitLossPoints, 0))
                 quantity = abs(filledQuantity)
-                capital = round(quantity * getMaintenanceMargin(self.getSymbol(), filledPrice), 2)
+                capital = round(quantity * getMaintenanceMargin(self.getSymbol(), filledPrice), LIGlobal.moneyPrecision)
                 duration = 0
                 if self.createdOpenOrderTime:
                     closedOrderTime = self.closeOrderTicket.Time if self.closeOrderTicket else orderEvent.UtcTime
@@ -940,7 +945,7 @@ class LIGridTradingLot(LIGridBaseLot):
         if self.getOpenFromPrice():
             result += f", openFromPrice={self.getOpenFromPrice()}"
         if self.gridTrading.bollingerBandsIndicator:
-            result += f", bollingerBandPrices={self.gridTrading.bollingerBandsIndicator.getBandPrices()}"
+            result += f", allBandPrices={self.gridTrading.bollingerBandsIndicator.getBandPrices()}"
         return result
 
     def restoreLotMetadata(self, postRollover=False):

@@ -128,8 +128,9 @@ class LIBollingerBandsIndicator(LIInsightIndicator):
         prices = []
         band = self.getHeadBand()
         while band:
-            prices.append(band.getPrice())
+            prices.append(self.positionManager.roundSecurityPrice(band.getPrice()))
             band = band.nextBand
+        return prices
 
     def getBandNames(self) -> []:
         names = []
@@ -200,10 +201,11 @@ class LIBollingerBandsIndicator(LIInsightIndicator):
             startBand = startBand.prevBand
         if startBand != self.startBand:
             log(f"{self.securityMonitor.getSymbolAlias()}: Emit trade insight to switch start band from {self.startBand} to {startBand}")
+            signalType = LISignalType.RISING if startBand.getPrice() > self.startBand.getPrice() else LISignalType.FALLING
             self.startBand = startBand
             return LITradeInsight(serialId=self.tradeInsight.serialId + 1,
                                   symbolStr=self.getSymbol().Value,
-                                  signalType=LISignalType.REALIGN,
+                                  signalType=signalType,
                                   timestamp=timestamp)
 
     def purgeRollingWindow(self):

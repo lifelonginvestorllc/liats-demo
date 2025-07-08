@@ -11,6 +11,8 @@ class LifelongInvestorMain(LIAlgorithm):
         setLogSize(500)  # Only for backtesting
         setAlgoName("Backtest")  # Invest account name
         # setAccountOwner("Lifelong Investor")  # Invest account owner
+        # setIbkrToken("30157805795961367012345")
+        # setIbkrQueryId("12345678")
         addNotifySetting(LINotifyType.TELEGRAM, "-913280749")
         addAlertSetting(LINotifyType.EMAIL, "lifelonginvestorllc@gmail.com")
         # sendDailyMetadataAlert()  # Enable to send daily metadata via alert
@@ -28,6 +30,7 @@ class LifelongInvestorMain(LIAlgorithm):
         self.futureGridTrading_Contrarian_Nasdaq()
         # self.futureGridTrading_Contrarian_Euro()
         # self.futureGridTrading_Contrarian_Oil()
+        # self.futureGridTrading_Contrarian_Gold()
 
         # self.futureGridTrading_Euro_Momentum()
         # self.futureGridTrading_Euro_Contrarian_Agile()
@@ -74,21 +77,21 @@ class LifelongInvestorMain(LIAlgorithm):
 
     def futureGridTrading_Contrarian_Nasdaq(self):
         self.SetCash(300_000)
-        # 2021 annual performance: short(328/-71.86%/-85.2%); long(313/101.89%/-26.8%) -> (368/112.99%/-19.2%)
+        # 2021 annual performance: short(328/-71.86%/-85.2%); long(313/101.89%/-26.8%) -> (368/112.99%/-19.2%) -> (510/105.13%/-27.5%/15mins/25K) -> (562/110.83%/-27.2%/5mins/25K)
         # self.SetStartDate(date(2021, 1, 1))
         # self.SetEndDate(date(2021, 12, 31))
-        # 2022 annual performance: short(1035/90.41%/-35.3%); long(386/-86.43%/-90.1%) -> (172/-99.17%/-99.2%) # Must set stop loss!
+        # 2022 annual performance: short(1035/90.41%/-35.3%); long(386/-86.43%/-90.1%) -> (172/-99.17%/-99.2%) # Must stop trading this year!
         # self.SetStartDate(date(2022, 1, 1))
         # self.SetEndDate(date(2022, 12, 31))
-        # 2023 annual performance: short(253/-89.81%/-94.8%); long(364/108.3%/-19.8%) -> (465/80.67%/-26.6%)
+        # 2023 annual performance: short(253/-89.81%/-94.8%); long(364/108.3%/-19.8%) -> (465/80.67%/-26.6%) -> (311/69.23%/-22.0%/15mins/25K) -> (330/76.58%/-21.3%/5mins/25K)
         # self.SetStartDate(date(2023, 1, 1))
         # self.SetEndDate(date(2023, 12, 31))
-        # 2024 annual performance: short(274/-15.16%/-62.2%); long(324/78.27%/-50.9%) -> (401/98.05%/-35.3%)
-        self.SetStartDate(date(2024, 1, 1))
-        self.SetEndDate(date(2024, 12, 31))
-        # 2025 annual performance:
-        # self.SetStartDate(date(2025, 1, 1))
-        # self.SetEndDate(date(2025, 12, 31))
+        # 2024 annual performance: short(274/-15.16%/-62.2%); long(324/78.27%/-50.9%) -> (401/98.05%/-35.3%) -> (507/114.34%/-33.4%/15mins/25K) -> (514/115.45%/-35.1%/5mins/25K)
+        # self.SetStartDate(date(2024, 1, 1))
+        # self.SetEndDate(date(2024, 12, 31))
+        # 2025 annual performance: short(?); long(262/-24.94%/-65.5%/15mins/25K) -> (270/-10.35%/-59.0%/5mins/25K)
+        self.SetStartDate(date(2025, 1, 1))
+        self.SetEndDate(date(2025, 6, 6))
         # self.SetStartDate(datetime.now() - timedelta(days=365))
         # self.SetEndDate(datetime.now())
 
@@ -97,9 +100,10 @@ class LifelongInvestorMain(LIAlgorithm):
         amplifier = 2  # Amplify invest amount by n times!
         configs = {
             LIConfigKey.aliasName: "NasdaqTrail",
-            # LIConfigKey.monitorPeriod: 5 * 3,  # Quicker response to market
-            LIConfigKey.monitorPeriod: 1,  # Better in a long run!
-            LIConfigKey.resolution: LIResolution.HOUR,
+            LIConfigKey.monitorPeriod: 5,  # 5 * 3
+            # LIConfigKey.monitorPeriod: 1,
+            # LIConfigKey.resolution: LIResolution.HOUR,
+            # LIConfigKey.marketBias: LIMarketBias.BULLISH,
             # LIConfigKey.futureContractExpiry: date(2025, 6, 20),
             # LIConfigKey.closeWithStopOrderType: True,
             # LIConfigKey.openWithMarketOrderType: False,
@@ -107,11 +111,11 @@ class LifelongInvestorMain(LIAlgorithm):
             # Better to liquidate at some point to exit one side of trading
             LIConfigKey.liquidateOnStopLossAmount: 100_000 * amplifier,  # 100_000 * amplifier,
             # LIConfigKey.liquidateLossAndLimitTrading: True,
-            LIConfigKey.liquidateLossAndRestartTrading: False,
-            LIConfigKey.liquidateOnTakeProfitAmount: 50_000 * amplifier,  # 50_000 * amplifier,
+            LIConfigKey.liquidateLossAndRestartTrading: True,
+            LIConfigKey.liquidateOnTakeProfitAmount: 50_000 * amplifier * 0.5,  # 50_000 * amplifier,
             # LIConfigKey.gridNoMoreOpenOrders: True,
             LIConfigKey.gridLongLots: 20,
-            # LIConfigKey.gridShortLots: 20, # Not short for Nasdaq!
+            # LIConfigKey.gridShortLots: 20,
             LIConfigKey.gridLotLevelPercent: 0.6,  # 0.60,
             LIConfigKey.gridLotLevelAugment: 0.015,  # Perform better in a long run with volatile market
             LIConfigKey.gridLotStopLossFactor: 25,
@@ -125,11 +129,11 @@ class LifelongInvestorMain(LIAlgorithm):
             # LIConfigKey.gridHedgeEnabled: True,
             # LIConfigKey.gridHedgeOverLosingLots: 5,
             # LIConfigKey.gridFollowAdverseTrend: True,
-            # LIConfigKey.gridBandingStartPrices: {LIGridSide.BTD: "band-#0-middle", LIGridSide.STU: "band-#0-middle"},
-            # LIConfigKey.gridBandingOpenFromPrices: {LIGridSide.BTD: "band-#1-lower", LIGridSide.STU: "band-#1-upper"},
-            # LIConfigKey.gridBandingLimitStartPrices: {LIGridSide.BTD: "band-#2-upper", LIGridSide.STU: "band-#2-lower"},
-            # LIConfigKey.bollingerBandsParams: [(300, 1), (300, 2), (300, 3)],
-            # LIConfigKey.investAmountTierFactors: [0, 0, 1, 1, 0, 0, 0, 0],  # Only do trading within specified bands (122/-27.91%/-36.30%)
+            # LIConfigKey.gridBandingStartPrices: {LIGridSide.BTD: "band-#2-upper"},
+            # LIConfigKey.gridBandingOpenFromPrices: {LIGridSide.BTD: "band-#1-upper"},
+            LIConfigKey.gridBandingLimitStartPrices: {LIGridSide.BTD: "band-#2-upper"},
+            LIConfigKey.bollingerBandsParams: [(300, 1), (300, 2), (300, 3)],
+            LIConfigKey.investAmountTierFactors: [0, 0, 1, 1, 0, 0, 0, 0],  # Only do trading within specified bands (122/-27.91%/-36.30%)
             # LIConfigKey.monitorPeriodTierFactors: [1, 1, 1, 1, 4, 4, 4, 4],  # Mapping band tiers from upper to lower
             # LIConfigKey.takeProfitAmountTierFactors: [1, 1, 1, 0.1, 0.1, 0.1, 0.1, 0.1],  # Take profit ASAP when approaching specified bands
             LIConfigKey.gridInitializeSession: True,  # Be careful!
@@ -187,18 +191,22 @@ class LifelongInvestorMain(LIAlgorithm):
 
     def futureGridTrading_Contrarian_Oil(self):
         self.SetCash(300_000)
-        # 2024: (225/157.36%/-24.5%); trailingOpenPrice: (257/202.28%/-20.8%)
-        self.SetStartDate(date(2024, 1, 1))
-        self.SetEndDate(date(2024, 12, 31))
+        # 2024: (225/157.36%/-24.5%) -> (240/162.9%/-23.6%); trailingOpenPrice: (257/202.28%/-20.8%) -> (275/193.20%/-21.4%)
+        # self.SetStartDate(date(2024, 1, 1))
+        # self.SetEndDate(date(2024, 12, 31))
+        self.SetStartDate(date(2025, 1, 1))
+        self.SetEndDate(date(2025, 12, 31))
 
         # Extreme uptrend market
         # self.SetStartDate(date(2021, 12, 20))
         # self.SetEndDate(date(2022, 3, 8))
         # self.SetEndDate(date(2022, 3, 15))
 
+        amplifier = 1
         configs = {
             LIConfigKey.aliasName: "OilBoth",
             # LIConfigKey.verbose: True,
+            # LIConfigKey.monitorPeriod: 5 * 3,
             LIConfigKey.monitorPeriod: 1,
             LIConfigKey.resolution: LIResolution.HOUR,
             LIConfigKey.futurePeriodDays: 35,
@@ -209,20 +217,20 @@ class LifelongInvestorMain(LIAlgorithm):
             # LIConfigKey.closeWithStopOrderType: True,  # Limit market order performs better!
             # LIConfigKey.liquidateAndStopTrading: True,
             # LIConfigKey.liquidateOnReachedPrices: {LIGridSide.BTD: 76, LIGridSide.STU: 78},
-            # Adjust it dynamically based on current market trend/volatility and momentum strategy's profit loss!
-            LIConfigKey.liquidateOnTakeProfitAmount: 75_000,
+            LIConfigKey.liquidateOnStopLossAmount: 150_000 * amplifier,
+            # LIConfigKey.liquidateLossAndRestartTrading: True,
+            LIConfigKey.liquidateOnTakeProfitAmount: 75_000 * amplifier,
             # LIConfigKey.liquidateByTrailingProfitPercent: 15,
-            LIConfigKey.liquidateOnStopLossAmount: 150_000,
-            LIConfigKey.liquidateLossAndRestartTrading: True,
             # LIConfigKey.gridNoMoreOpenOrders: True,
             # LIConfigKey.gridRetainOpenedLots: -1,
             LIConfigKey.gridLongLots: 20,  # 20
             LIConfigKey.gridShortLots: 20,  # 20
-            LIConfigKey.gridLotLevelPercent: 0.75,
+            LIConfigKey.gridLotLevelPercent: 0.75 * 2,
             # LIConfigKey.gridLotLevelAugment: 0.025,
             LIConfigKey.gridLotStopLossFactor: 25,
             LIConfigKey.gridLotStopProfitFactors: (0.5, 2),
             # LIConfigKey.gridLotPauseAfterStopLoss: False,
+            # LIConfigKey.gridCancelOrdersAfterClosed: True,
             LIConfigKey.gridTrailingOpenPriceFactor: 1,
             # LIConfigKey.gridFixLeakingPositions: True,
             # LIConfigKey.gridRealignOpenPositions: True,
@@ -232,12 +240,44 @@ class LifelongInvestorMain(LIAlgorithm):
             # Enable banding open from price for both sides contrarian
             LIConfigKey.gridBandingStartPrices: {LIGridSide.BTD: "band-#0-middle", LIGridSide.STU: "band-#0-middle"},
             LIConfigKey.gridBandingOpenFromPrices: {LIGridSide.BTD: "band-#1-lower", LIGridSide.STU: "band-#1-upper"},
-            LIConfigKey.bollingerBandsParams: [(365, 1.25)],
+            LIConfigKey.bollingerBandsParams: [(365, 1.25), (365, 2.5)],
+            LIConfigKey.investAmountTierFactors: [0, 1, 0, 0, 1, 0],  # Only do trading within specified bands (122/-27.91%/-36.30%)
             LIConfigKey.gridInitializeSession: True,  # Be careful!
         }
-        investAmount = LIInvestAmount(lotQuantity=1)
+        investAmount = LIInvestAmount(lotQuantity=1 * amplifier)
         self.liStrategies.append(LIFutureGridTradingContrarian(Futures.Energies.CrudeOilWTI, investAmount, **configs))  # (282/184.28%/-12.9%)
-        # self.liStrategies.append(LIFutureGridTradingMomentum(Futures.Energies.CrudeOilWTI, investAmount, **configs))  # (459/246.44%/-14.7%)
+
+    def futureGridTrading_Contrarian_Gold(self):
+        self.SetCash(300_000)
+        self.SetStartDate(date(2024, 10, 1))
+        self.SetEndDate(date(2025, 12, 31))
+
+        amplifier = 3  # Amplify invest amount by n times! Adjust based on win rate!
+        configs = {
+            LIConfigKey.aliasName: "GoldTrail",
+            # LIConfigKey.monitorPeriod: 5,  # 5 mins
+            LIConfigKey.monitorPeriod: 1,
+            LIConfigKey.resolution: LIResolution.HOUR,
+            LIConfigKey.futurePeriodDays: 65,
+            LIConfigKey.futureRolloverDays: 30,
+            LIConfigKey.fetchHistoryBarData: False,
+            LIConfigKey.closeWithStopOrderType: False,
+            LIConfigKey.liquidateOnStopLossAmount: 30_000 * amplifier,
+            LIConfigKey.liquidateOnTakeProfitAmount: 15_000 * amplifier,
+            # LIConfigKey.liquidateAndStopTrading: True,
+            LIConfigKey.gridLongLots: 20,
+            LIConfigKey.gridRetainOpenedLots: 1,
+            LIConfigKey.gridLotLevelPercent: 0.70,
+            # LIConfigKey.gridLotLevelAugment: 0.0175,
+            LIConfigKey.gridLotStopProfitFactors: (0.5, 2),
+            LIConfigKey.gridLotStopLossFactor: 25,
+            # LIConfigKey.gridCancelOrdersAfterClosed: True,
+            # LIConfigKey.gridTrailingOpenPriceFactor: 1.0,  # Enable for bullish market only to avoid acquiring too many open positions!
+            # LIConfigKey.gridRealignOpenPositions: True,
+            LIConfigKey.gridInitializeSession: True,  # Be careful! (mostly used in backtest)
+        }
+        investAmount = LIInvestAmount(lotQuantity=1 * amplifier)
+        self.liStrategies.append(LIFutureGridTradingContrarian(Futures.Metals.MicroGold, investAmount, **configs))
 
     def equityManualTrading(self):
         self.SetCash(1_000_000)
@@ -253,220 +293,6 @@ class LifelongInvestorMain(LIAlgorithm):
 
         investAmount = LIInvestAmount(maxHolding=1)
         self.liStrategies.append(LIEquityManualTrading("SPY", investAmount, **configs))
-
-    def futureGridTrading_Oil_Momentum(self):
-        self.SetCash(200_000)
-        amplifier = 1  # Amplify invest amount by n times!
-
-        # Reached upper band with raising price:
-        # Fixed open from prices: (163/162.83%/-16.30%)
-        # Dynamic open from prices: (149/114.18%/-23.40%)
-        self.SetStartDate(date(2022, 2, 18))
-        self.SetEndDate(date(2022, 4, 18))
-        # self.SetStartDate(date(2024, 9, 1))
-        # self.SetEndDate(date(2024, 12, 31))
-
-        configs = {
-            LIConfigKey.aliasName: "OilTrend",
-            LIConfigKey.monitorPeriod: 1,
-            LIConfigKey.resolution: LIResolution.HOUR,
-            # Adjust it dynamically based on current market trend/volatility and paired contrarian strategy's profit loss!
-            LIConfigKey.liquidateOnTakeProfitAmounts: {LIGridSide.BTU: 35_000 * amplifier, LIGridSide.STD: 35_000 * amplifier},
-            LIConfigKey.liquidateByTrailingProfitPercent: 15,
-            # LIConfigKey.liquidateWithStopOrderType: True,
-            LIConfigKey.gridLongLots: 30,
-            LIConfigKey.gridShortLots: 30,
-            LIConfigKey.gridLotLevelPercent: 0.75,
-            LIConfigKey.gridLotStopLossFactor: 30,
-            LIConfigKey.gridLotTakeProfitFactor: 25,
-            LIConfigKey.gridLotPauseAfterProfit: False,
-            # LIConfigKey.gridFixedOpenFromPrices: {LIGridSide.STD: 40, LIGridSide.BTU: 100},
-            LIConfigKey.gridBandingOpenFromPrices: {LIGridSide.BTD: "band-#1-lower", LIGridSide.STU: "band-#1-upper"},
-            LIConfigKey.bollingerBandsParams: [(365, 2)],
-            LIConfigKey.gridInitializeSession: True,  # Be careful!
-        }
-
-        # # Reached upper and lower band (37/36.16%/-??%)
-        # self.SetStartDate(date(2024, 3, 25))
-        # self.SetEndDate(date(2024, 6, 25))
-        # configs = {
-        #     LIConfigKey.aliasName: "OilTrend",
-        #     LIConfigKey.monitorPeriod: 1,
-        #     LIConfigKey.resolution: LIResolution.HOUR,
-        #     # Adjust it dynamically based on current market trend/volatility and paired contrarian strategy's profit loss!
-        #     LIConfigKey.liquidateOnTakeProfitAmounts: {LIGridSide.BTU: 35_000 * amplifier, LIGridSide.STD: 35_000 * amplifier},
-        #     # LIConfigKey.liquidateByTrailingProfitPercent: 25,
-        #     LIConfigKey.gridLongLots: 30,
-        #     LIConfigKey.gridShortLots: 30,
-        #     LIConfigKey.gridLotLevelPercent: 0.75,
-        #     LIConfigKey.gridLotStopLossFactor: 30,
-        #     LIConfigKey.gridLotTakeProfitFactor: 25,
-        #     LIConfigKey.gridLotPauseAfterProfit: False,
-        #     LIConfigKey.gridFixedOpenFromPrices: {LIGridSide.STD: 74, LIGridSide.BTU: 84},
-        #     LIConfigKey.gridInitializeSession: True,  # Be careful!
-        # }
-
-        # # Reached lower band twice (33/22.42%/-??%)
-        # self.SetStartDate(date(2024, 9, 1))
-        # self.SetEndDate(date(2024, 11, 1))
-        # configs = {
-        #     LIConfigKey.aliasName: "OilTrend",
-        #     LIConfigKey.monitorPeriod: 1,
-        #     LIConfigKey.resolution: LIResolution.HOUR,
-        #     # Adjust it dynamically based on current market trend/volatility and paired contrarian strategy's profit loss!
-        #     LIConfigKey.liquidateOnTakeProfitAmounts: {LIGridSide.BTU: 35_000 * amplifier, LIGridSide.STD: 35_000 * amplifier},
-        #     # LIConfigKey.liquidateByTrailingProfitPercent: 25,
-        #     LIConfigKey.gridLongLots: 30,
-        #     LIConfigKey.gridShortLots: 30,
-        #     LIConfigKey.gridLotLevelPercent: 0.75,
-        #     LIConfigKey.gridLotStopLossFactor: 30,
-        #     LIConfigKey.gridLotTakeProfitFactor: 25,
-        #     LIConfigKey.gridLotPauseAfterProfit: False,
-        #     LIConfigKey.gridFixedOpenFromPrices: {LIGridSide.STD: 67, LIGridSide.BTU: 89},
-        #     LIConfigKey.gridInitializeSession: True,  # Be careful!
-        # }
-
-        investAmount = LIInvestAmount(lotQuantity=1 * amplifier)
-        self.liStrategies.append(LIFutureGridTradingMomentum(Futures.Energies.CrudeOilWTI, investAmount, **configs))
-
-    def futureGridTrading_Oil_Contrarian_Hour(self):
-        self.SetCash(300_000)
-        # Up/Down/Up bull Trend (49/45.10%):
-        # self.SetStartDate(date(2023, 7, 28))
-        # self.SetEndDate(date(2023, 9, 28))
-        # Up/Down/Up bear Trend: 0 is better than 30
-        # self.SetStartDate(date(2023, 9, 15))
-        # self.SetEndDate(date(2023, 10, 15))
-        # Up and down trend with stop limit:
-        # Fixed open from price: (123/69.30%/-11.10%)
-        # Dynamic open from price: (104/56.93%/-11.70%) -> (97/65.35%/-10.10%) -> (94/66.52%/-9.30%)
-        self.SetStartDate(date(2024, 4, 1))
-        self.SetEndDate(date(2024, 9, 1))
-        # self.SetStartDate(date(2024, 3, 18))
-        # The stop limit order is not working properly!
-        # self.SetStartDate(date(2024, 11, 1))
-        # self.SetEndDate(date(2024, 11, 15))
-        # self.SetStartDate(date(2023, 7, 1))
-        # self.SetEndDate(date(2023, 11, 1))
-        # Stay low for a few months: (128/50.93%/-27.60%)
-        # self.SetStartDate(date(2024, 9, 1))
-        # self.SetEndDate(date(2024, 12, 31))
-        # Two extremely rising spikes
-        # self.SetStartDate(date(2021, 12, 20))
-        # self.SetEndDate(date(2022, 4, 20))
-
-        configs = {
-            LIConfigKey.aliasName: "OilTrail",
-            LIConfigKey.monitorPeriod: 1,
-            LIConfigKey.resolution: LIResolution.HOUR,
-            LIConfigKey.futurePeriodDays: 35,
-            LIConfigKey.futureRolloverDays: 3,
-            # LIConfigKey.verbose: True,
-            # LIConfigKey.signalSymbolStr: "USOIL",
-            # LIConfigKey.signalSecurityType: SecurityType.Cfd,
-            # LIConfigKey.futureRolloverDays: 5,
-            # LIConfigKey.closeWithStopOrderType: True,
-            # LIConfigKey.liquidateAndStopTrading: True,
-            # LIConfigKey.liquidateOnReachedPrices: {LIGridSide.BTD: 76, LIGridSide.STU: 78},
-            # Adjust it dynamically based on current market trend/volatility and momentum strategy's profit loss!
-            LIConfigKey.liquidateOnTakeProfitAmount: 50_000,
-            # LIConfigKey.liquidateByTrailingProfitPercent: 15,
-            LIConfigKey.liquidateOnStopLossAmount: 100_000,
-            # LIConfigKey.gridLotPauseAfterStopLoss: False,
-            LIConfigKey.gridLongLots: 20,
-            # LIConfigKey.gridLongLotsQty: [1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3],
-            LIConfigKey.gridShortLots: 20,
-            # LIConfigKey.gridShortLotsQty: [1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3],
-            LIConfigKey.gridLotLevelPercent: 0.75,
-            # LIConfigKey.gridLotLevelAugment: 0.025,
-            LIConfigKey.gridLotStopLossFactor: 25,
-            # LIConfigKey.gridLotMaxProfitFactor: 10,
-            LIConfigKey.gridLotStopProfitFactors: (0.5, 2),
-            # LIConfigKey.gridCloseCounterpartLots: False,
-            # LIConfigKey.gridFixLeakingPositions: True,
-            # 4/1/2024 - 9/1/2024
-            # LIConfigKey.gridFixedStartPrices: {LIGridSide.BTD: 79, LIGridSide.STU: 79},
-            # LIConfigKey.gridFixedOpenFromPrices: {LIGridSide.BTD: 74, LIGridSide.STU: 84},
-            # 9/1/2024 - 12/1/2024
-            # LIConfigKey.gridFixedStartPrices: {LIGridSide.BTD: 77, LIGridSide.STU: 77},
-            # LIConfigKey.gridFixedOpenFromPrices: {LIGridSide.BTD: 72, LIGridSide.STU: 82},
-            # LIConfigKey.gridFixedStartPrices: {LIGridSide.BTD: 76, LIGridSide.STU: 76},
-            # LIConfigKey.gridFixedOpenFromPrices: {LIGridSide.BTD: 71, LIGridSide.STU: 81},
-            LIConfigKey.gridBandingStartPrices: {LIGridSide.BTD: "band-#0-middle", LIGridSide.STU: "band-#0-middle"},
-            LIConfigKey.gridBandingOpenFromPrices: {LIGridSide.BTD: "band-#1-lower", LIGridSide.STU: "band-#1-upper"},
-            LIConfigKey.bollingerBandsParams: [(365, 1)],
-            LIConfigKey.gridInitializeSession: True,
-        }
-        investAmount = LIInvestAmount(lotQuantity=1)
-        self.liStrategies.append(LIFutureGridTradingContrarian(Futures.Energies.CrudeOilWTI, investAmount, **configs))
-
-    def futureGridTrading_Oil_Contrarian_5Mins(self):
-        self.SetCash(300_000)
-        # Up/Down/Up bull Trend (49/45.10%):
-        # self.SetStartDate(date(2023, 7, 28))
-        # self.SetEndDate(date(2023, 9, 28))
-        # Up/Down/Up bear Trend: 0 is better than 30
-        # self.SetStartDate(date(2023, 9, 15))
-        # self.SetEndDate(date(2023, 10, 15))
-        # Up and down trend with stop limit:
-        # Fixed open from price: (123/69.30%/-11.10%)
-        # Dynamic open from price: (104/56.93%/-11.70%) -> (97/65.35%/-10.10%)
-        self.SetStartDate(date(2024, 4, 1))
-        self.SetEndDate(date(2024, 9, 1))
-        # self.SetStartDate(date(2024, 3, 18))
-        # The stop limit order is not working properly!
-        # self.SetStartDate(date(2024, 11, 1))
-        # self.SetEndDate(date(2024, 11, 15))
-        # self.SetStartDate(date(2023, 7, 1))
-        # self.SetEndDate(date(2023, 11, 1))
-        # Stay low for a few months: (143/16.05%/-6.20%)
-        # self.SetStartDate(date(2024, 10, 25))
-        # self.SetEndDate(date(2024, 12, 31))
-        # Trending from neutral to bullish
-        self.SetStartDate(date(2024, 12, 1))
-        self.SetEndDate(date(2025, 1, 20))
-        # self.SetStartDate(date(2024, 12, 4))
-        # self.SetEndDate(date(2024, 12, 15))
-        # self.SetStartDate(date(2024, 12, 27))
-        # self.SetEndDate(date(2025, 1, 7))
-        # self.SetStartDate(date(2025, 1, 1))
-        # self.SetEndDate(date(2025, 1, 4))
-
-        configs = {
-            LIConfigKey.aliasName: "OilTrail",
-            LIConfigKey.monitorPeriod: 5,
-            LIConfigKey.resolution: LIResolution.MINUTE,
-            LIConfigKey.futurePeriodDays: 35,
-            LIConfigKey.futureRolloverDays: 3,
-            # LIConfigKey.verbose: True,
-            # LIConfigKey.signalSymbolStr: "USOIL",
-            # LIConfigKey.signalSecurityType: SecurityType.Cfd,
-            # LIConfigKey.futureRolloverDays: 5,
-            # LIConfigKey.closeWithStopOrderType: True,
-            # LIConfigKey.liquidateAndStopTrading: True,
-            # LIConfigKey.liquidateOnReachedPrices: {LIGridSide.BTD: 76, LIGridSide.STU: 78},
-            # Adjust it dynamically based on current market trend/volatility and momentum strategy's profit loss!
-            LIConfigKey.liquidateLossAndRestartTrading: True,
-            LIConfigKey.liquidateOnStopLossAmount: 50_000,
-            LIConfigKey.liquidateOnTakeProfitAmount: 10_000,
-            # LIConfigKey.liquidateByTrailingProfitPercent: 15,
-            # LIConfigKey.gridLotPauseAfterStopLoss: False,
-            LIConfigKey.gridLongLots: 10,
-            LIConfigKey.gridShortLots: 10,
-            LIConfigKey.gridLotLevelPercent: 0.5,
-            LIConfigKey.gridLotStopLossFactor: 15,
-            # LIConfigKey.gridLotMaxProfitFactor: 10,
-            LIConfigKey.gridLotStopProfitFactors: (0.5, 2),
-            # LIConfigKey.gridCloseCounterpartLots: False,
-            # LIConfigKey.gridFixLeakingPositions: True,
-            LIConfigKey.gridBandingStartPrices: {LIGridSide.BTD: "band-#2-upper", LIGridSide.STU: "band-#2-upper"},
-            LIConfigKey.gridBandingOpenFromPrices: {LIGridSide.BTD: "band-#1-upper", LIGridSide.STU: "band-#3-upper"},
-            LIConfigKey.bollingerBandsParams: [(300, 1, LIResolution.HOUR), (300, 2, LIResolution.HOUR), (300, 3, LIResolution.HOUR)],
-            # LIConfigKey.marketBias: LIMarketBias.NEUTRAL,
-            LIConfigKey.gridInitializeSession: True,
-        }
-        investAmount = LIInvestAmount(lotQuantity=1)
-        self.liStrategies.append(LIFutureGridTradingContrarian(Futures.Energies.CrudeOilWTI, investAmount, **configs))
 
     def futureGridTrading_Gas_Trail(self):
         self.SetCash(200_000)

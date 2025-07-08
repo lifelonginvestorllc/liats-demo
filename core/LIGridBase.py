@@ -415,8 +415,13 @@ class LIGridBase(LITrading):
             return self.stochasticComboIndicator.getTradeInsight()
         if self.bollingerBandsIndicator:
             return self.bollingerBandsIndicator.getTradeInsight()
-        else:
-            return super().getTradeInsight()
+        return super().getTradeInsight()
+
+    def getTradingTierFactorIndex(self):
+        tierIndex = int(self.tradingTierName.split("-")[1][1:])
+        bandCounts = self.bollingerBandsIndicator.countBands()
+        tierFactorIndex = (bandCounts[1] - tierIndex) if ("upper" in self.tradingTierName) else (bandCounts[0] - bandCounts[1] + tierIndex)
+        return tierFactorIndex
 
     def getHedgeInsightIndicator(self, securityMonitor: LISecurityMonitor, positionManager: LIPositionManager) -> LIInsightIndicator:
         symbolKey = securityMonitor.getSymbolKey()
@@ -441,12 +446,6 @@ class LIGridBase(LITrading):
             insightIndicator = LIStochasticComboIndicator(securityMonitor, positionManager, self.mainChart, self.configs)
             self.insightIndicators[symbolKey] = insightIndicator
         return insightIndicator
-
-    def getTierFactorIndex(self):
-        tierIndex = int(self.tradingTierName.split("-")[1][1:])
-        bandCounts = self.bollingerBandsIndicator.countBands()
-        tierFactorIndex = (bandCounts[1] - tierIndex) if ("upper" in self.tradingTierName) else (bandCounts[0] - bandCounts[1] + tierIndex)
-        return tierFactorIndex
 
     @deprecated(reason="Use cancelActiveOrders() and resubmit order tickets instead.")
     def assignOpenOrderTickets(self):
@@ -739,45 +738,45 @@ class LIGridBase(LITrading):
                 #        f"dcaHoldingQuantity={self.dcaHoldingQuantity}. And restart grid session.")
                 # self.restartGridSession()
 
-    def monitorRiskManagement(self):
-        if not self.riskProposeHedgeInsights:
-            return  # Abort as not enabled
-        if self.tradeSecurityType == SecurityType.FUTURE:
-            tradeSymbol = self.getTradeSecurity().Symbol
-            if self.securityMonitor.isContractExpired(expiryDays=self.riskHedgeOptionExpiryDays):
-                futures = getAlgo().FutureChainProvider.GetFutureContractList(tradeSymbol.Canonical, getAlgo().Time)
-                tradeSymbol = sorted([x for x in futures if isExpiredAfterDays(x.ID.Date, self.riskHedgeOptionExpiryDays)], key=lambda x: x.ID.Date)[0]
-                log(f"{self.getSymbolAlias()}: Picked the hedge future contract {cleanSymbolValue(tradeSymbol)} expired after {self.riskHedgeOptionExpiryDays} days")
-            options = getAlgo().OptionChainProvider.GetOptionContractList(tradeSymbol, getAlgo().Time)
-            if options and self.isContrarianMode():
-                optionSymbols = []
-                if self.gridLongLots:
-                    # Take the middle of stop loss price as the init strike price
-                    stopLossPrice = self.getFirstLongLot().getStopLossPrice()[0]
-                    stopLossPrice += self.getLastLongLot().getStopLossPrice()[0]
-                    stopLossPrice = self.positionManager.roundSecurityPrice(stopLossPrice / 2)
-                    optionSymbols += sorted(
-                        [x for x in options if
-                         x.ID.OptionStyle == OptionStyle.American and x.ID.OptionRight == OptionRight.Put and x.ID.StrikePrice <= stopLossPrice],
-                        key=lambda x: x.ID.StrikePrice, reverse=True)[0:5]
-                if self.gridShortLots:
-                    # Take the middle of stop loss price as the init strike price
-                    stopLossPrice = self.getFirstShortLot().getStopLossPrice()[0]
-                    stopLossPrice += self.getLastShortLot().getStopLossPrice()[0]
-                    stopLossPrice = self.positionManager.roundSecurityPrice(stopLossPrice / 2)
-                    optionSymbols += sorted(
-                        [x for x in options if
-                         x.ID.OptionStyle == OptionStyle.American and x.ID.OptionRight == OptionRight.Call and x.ID.StrikePrice >= stopLossPrice],
-                        key=lambda x: x.ID.StrikePrice, reverse=False)[0:5]
-                optionContracts = []
-                for optionSymbol in optionSymbols:
-                    optionContracts.append(self.securityMonitor.addFutureOptionContract(optionSymbol))
-                # Warm up the open interest cache data
-                history = getAlgo().History(OpenInterest, optionSymbols, 10, resolution=Resolution.Daily)
-                if len(history.index) == 0 or 0 in history.values:
-                    alert(f"{self.getNotifyPrefix()}: Open interest history request got empty values!")
-                if optionContracts:
-                    proposal = f"Propose to buy some of following future options: \n"
-                    for optionContract in optionContracts:
-                        proposal += f"{printOptionContract(optionContract)}\n"
-                    notify(f"{self.getNotifyPrefix()}: {proposal}")
+    def monitorTradingRisk(self):
+        # self.manageGridLiquidation()
+        if self.riskProposeHedgeInsights:
+            if self.tradeSecurityType == SecurityType.FUTURE:
+                tradeSymbol = self.getTradeSecurity().Symbol
+                if self.securityMonitor.isContractExpired(expiryDays=self.riskHedgeOptionExpiryDays):
+                    futures = getAlgo().FutureChainProvider.GetFutureContractList(tradeSymbol.Canonical, getAlgo().Time)
+                    tradeSymbol = sorted([x for x in futures if isExpiredAfterDays(x.ID.Date, self.riskHedgeOptionExpiryDays)], key=lambda x: x.ID.Date)[0]
+                    log(f"{self.getSymbolAlias()}: Picked the hedge future contract {cleanSymbolValue(tradeSymbol)} expired after {self.riskHedgeOptionExpiryDays} days")
+                options = getAlgo().OptionChainProvider.GetOptionContractList(tradeSymbol, getAlgo().Time)
+                if options and self.isContrarianMode():
+                    optionSymbols = []
+                    if self.gridLongLots:
+                        # Take the middle of stop loss price as the init strike price
+                        stopLossPrice = self.getFirstLongLot().getStopLossPrice()[0]
+                        stopLossPrice += self.getLastLongLot().getStopLossPrice()[0]
+                        stopLossPrice = self.positionManager.roundSecurityPrice(stopLossPrice / 2)
+                        optionSymbols += sorted(
+                            [x for x in options if
+                             x.ID.OptionStyle == OptionStyle.American and x.ID.OptionRight == OptionRight.Put and x.ID.StrikePrice <= stopLossPrice],
+                            key=lambda x: x.ID.StrikePrice, reverse=True)[0:5]
+                    if self.gridShortLots:
+                        # Take the middle of stop loss price as the init strike price
+                        stopLossPrice = self.getFirstShortLot().getStopLossPrice()[0]
+                        stopLossPrice += self.getLastShortLot().getStopLossPrice()[0]
+                        stopLossPrice = self.positionManager.roundSecurityPrice(stopLossPrice / 2)
+                        optionSymbols += sorted(
+                            [x for x in options if
+                             x.ID.OptionStyle == OptionStyle.American and x.ID.OptionRight == OptionRight.Call and x.ID.StrikePrice >= stopLossPrice],
+                            key=lambda x: x.ID.StrikePrice, reverse=False)[0:5]
+                    optionContracts = []
+                    for optionSymbol in optionSymbols:
+                        optionContracts.append(self.securityMonitor.addFutureOptionContract(optionSymbol))
+                        # Warm up the open interest cache data
+                        history = getAlgo().History[TradeBar](optionSymbol, 10, resolution=Resolution.Daily)
+                        if len(history.index) == 0 or 0 in history.values:
+                            alert(f"{self.getNotifyPrefix()}: Open interest history request got empty values!")
+                        if optionContracts:
+                            proposal = f"Propose to buy some of following future options: \n"
+                            for optionContract in optionContracts:
+                                proposal += f"{printOptionContract(optionContract)}\n"
+                            notify(f"{self.getNotifyPrefix()}: {proposal}")

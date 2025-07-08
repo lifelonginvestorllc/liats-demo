@@ -379,9 +379,8 @@ class LIGridTrading(LIGridBase):
         if targetLot.isShortLot():
             targetQuantity = -targetQuantity
 
-        if self.investAmountTierFactors:
-            tierFactorIndex = self.getTierFactorIndex()
-            targetQuantity *= self.investAmountTierFactors[tierFactorIndex]
+        if self.investAmountTierFactors and not self.gridRealignOpenPositions:
+            targetQuantity *= self.investAmountTierFactors[self.getTradingTierFactorIndex()]
 
         return targetQuantity
 
@@ -579,10 +578,6 @@ class LIGridTrading(LIGridBase):
     def onEmitTradeInsight(self, tradeInsight: LITradeInsight):
         if self.isReadyToTrade:
             log(f"{self.getSymbolAlias()}: Received trade insight: {tradeInsight}")
-            if tradeInsight.signalType == LISignalType.REALIGN:
-                if not self.gridBandingStartPrices:
-                    self.startBandName = self.bollingerBandsIndicator.getStartBand().getName()
-                    self.realignOpenPositions(forceOnDemand=True)
             if self.isBoostingMode():
                 self.manageGridBoosting(forceTrade=True)  # Trigger all related actions
             else:
@@ -625,7 +620,7 @@ class LIGridTrading(LIGridBase):
                 log(f"{self.getSymbolAlias()}: Switching {LIMetadataKey.tradingTierName} from {self.tradingTierName} to {newTierName}.")
                 self.tradingTierName = newTierName
                 if self.monitorPeriodTierFactors:
-                    tierFactorIndex = self.getTierFactorIndex()
+                    tierFactorIndex = self.getTradingTierFactorIndex()
                     if self.gridLongLots:
                         self.gridMonitorPeriodFactors = {self.getGridLongSide(): self.monitorPeriodTierFactors[tierFactorIndex]}
                     if self.gridShortLots:
@@ -724,7 +719,7 @@ class LIGridTrading(LIGridBase):
         self.liquidateByTrailingProfit = 0.0  # Reset trailing profit!
         self.liquidatedAlready = True
         if unrealizedProfitAmount or investedCapital or investedQuantity:
-            self.realizedProfitLoss += unrealizedProfitAmount
+            self.realizedProfitLoss = round(self.realizedProfitLoss + unrealizedProfitAmount, LIGlobal.moneyPrecision)
             addDailyClosedTrade(self.canonicalSymbol.value, [unrealizedProfitAmount, 0, investedCapital, investedQuantity, 0])
         if markRollover:
             self.gridRolloverCriteria = (self.getSymbolValue(), filledLots[0], investedQuantity,
@@ -788,7 +783,7 @@ class LIGridTrading(LIGridBase):
         self.liquidateByTrailingProfit = 0.0  # Reset trailing profit!
         self.liquidatedAlready = True
         if unrealizedProfitAmount or investedCapital or investedQuantity:
-            self.realizedProfitLoss += unrealizedProfitAmount
+            self.realizedProfitLoss = round(self.realizedProfitLoss + unrealizedProfitAmount, LIGlobal.moneyPrecision)
             addDailyClosedTrade(self.canonicalSymbol.value, [unrealizedProfitAmount, 0, investedCapital, investedQuantity, 0])
         if markRollover:
             self.gridRolloverCriteria = (self.getSymbolValue(), filledLots, investedQuantity,
@@ -817,7 +812,7 @@ class LIGridTrading(LIGridBase):
                 self.pauseTradingTillTime = None  # Reset
         return False  # False means resume trading
 
-    def manageGridLiquidation(self, bar) -> bool:
+    def manageGridLiquidation(self, bar=None) -> bool:
         # Liquidate and stop trading on demand!
         if self.liquidateAndStopTrading:
             if not self.liquidatedAlready:
@@ -827,7 +822,7 @@ class LIGridTrading(LIGridBase):
                 self.postLiquidationMetadata()
             return True  # Abort on demand
         marketPrice = self.getMarketPrice(bar)
-        countFilledLots = self.countFilledLots()
+        # countFilledLots = self.countFilledLots()
         unrealizedProfitAmount = self.getUnrealizedProfitAmount()
         unrealizedProfitPercent = self.getUnrealizedProfitPercent()
         if self.liquidatedAlready and isMarketCloseTime(getAlgo().time):
@@ -946,7 +941,7 @@ class LIGridTrading(LIGridBase):
                 self.restartGridSession(reason="Restart after liquidation")
             elif self.liquidateLossAndLimitTrading:
                 notify(f"{self.getNotifyPrefix()}: Limit {self.getGridTradingSide()} side of trading after liquidated due to {tagLog}, "
-                       f"Will resume trading once market price revert back to {self.stoppedLossPrices}!")
+                       f"will resume trading once market price revert back to {self.stoppedLossPrices}!")
                 self.resetTradingLots(reason="Reset after stop loss liquidation")
                 self.resetGridStartPrices(emptyStartPrices=True, emptyOpenFromPrices=True)
             else:
@@ -965,7 +960,7 @@ class LIGridTrading(LIGridBase):
                 self.restartGridSession(reason="Restart after liquidation")
             elif self.liquidateLossAndLimitTrading:
                 notify(f"{self.getNotifyPrefix()}: Limit {self.getGridTradingSide()} side of trading after liquidated due to {tagLog}, "
-                       f"Will resume trading once market price revert back to {self.stoppedLossPrices}!")
+                       f"will resume trading once market price revert back to {self.stoppedLossPrices}!")
                 self.resetTradingLots(reason="Reset after stop loss liquidation")
                 self.resetGridStartPrices(emptyStartPrices=True, emptyOpenFromPrices=True)
             else:
@@ -1012,7 +1007,7 @@ class LIGridTrading(LIGridBase):
             else:
                 takeProfitAmount = self.liquidateOnTakeProfitAmounts[self.getGridShortSide()]
         if self.takeProfitAmountTierFactors:
-            takeProfitAmount *= self.takeProfitAmountTierFactors[self.getTierFactorIndex()]
+            takeProfitAmount *= self.takeProfitAmountTierFactors[self.getTradingTierFactorIndex()]
         takeProfitAmount *= self.getBaselineRatio()
         return takeProfitAmount
 
@@ -1527,7 +1522,7 @@ class LIGridTrading(LIGridBase):
                 orderEvent.FillQuantity = filledQuantity  # Overwrite with actual fill quantity
                 orderEvent.Quantity = filledQuantity  # Overwrite with actual fill quantity
                 orderEvent.OrderFee.Value = CashAmount(self.accruedFees / 2, orderEvent.OrderFee.Value.Currency)  # Overwrite with all close orders' fees
-                self.realizedProfitLoss += netProfit
+                self.realizedProfitLoss = round(self.realizedProfitLoss + netProfit, LIGlobal.moneyPrecision)
                 self.closedTradesCount += 1
                 additionalMsgs = f"totalProfitLoss={self.getMaxProfitLossAmount()}({self.getMaxProfitLossPercent()}%)"
                 self.positionManager.notifyOrderFilled(orderEvent, netProfit=netProfit, additionalMsgs=additionalMsgs, delayMaxMsgs=delayMaxMsgs)
@@ -1594,7 +1589,7 @@ class LIGridTrading(LIGridBase):
         if self.gridOpenFromPrices:
             result += f", openFromPrices={self.gridOpenFromPrices}"
         if self.bollingerBandsIndicator:
-            result += f", bollingerBandPrices={self.bollingerBandsIndicator.getBandPrices()}"
+            result += f", allBandPrices={self.bollingerBandsIndicator.getBandPrices()}"
         return result
 
     def printGridSession(self, withLots=True):
@@ -1719,7 +1714,7 @@ class LIGridTrading(LIGridBase):
             gridSide = self.getGridShortSide()
             marketPrice = self.getMarketPrice()
             startPrice = self.getStartPrice(gridSide)
-            if startPric:
+            if startPrice:
                 if self.isMomentumMode():
                     isActive &= marketPrice < startPrice
                 elif self.isContrarianMode():
@@ -1738,7 +1733,6 @@ class LIGridTrading(LIGridBase):
             return self.gridFixedStartPrices[gridSide]
         elif self.gridBandingStartPrices:
             return self.positionManager.roundSecurityPrice(self.bollingerBandsIndicator.getBand(self.gridBandingStartPrices[gridSide]).getPrice())
-        return self.positionManager.roundSecurityPrice(self.bollingerBandsIndicator.getStartBand().getPrice())
 
     def getOpenFromPrice(self, gridSide: LIGridSide):
         if self.gridFixedOpenFromPrices:

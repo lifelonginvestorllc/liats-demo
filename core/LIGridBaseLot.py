@@ -383,9 +383,9 @@ class LIGridBaseLot:
 
     def addRealizedProfitLoss(self, netProfit):
         self.closedTradesCount += 1
-        self.realizedProfitLoss = round(self.realizedProfitLoss + netProfit, 2)
+        self.realizedProfitLoss = round(self.realizedProfitLoss + netProfit, LIGlobal.moneyPrecision)
         self.gridTrading.closedTradesCount += 1
-        self.gridTrading.realizedProfitLoss = round(self.gridTrading.realizedProfitLoss + netProfit, 2)
+        self.gridTrading.realizedProfitLoss = round(self.gridTrading.realizedProfitLoss + netProfit, LIGlobal.moneyPrecision)
 
     def getRealizedProfitAmount(self):
         return self.realizedProfitLoss
@@ -495,6 +495,12 @@ class LIGridBaseLot:
         targetPrice = None
         limitFactor = self.gridTrailingOpenPriceFactor
         marketPrice = marketPrice if marketPrice else self.getMarketPrice()
+        limitStartPrice = self.gridTrading.getLimitStartPrice(self.getGridSide())
+        if limitStartPrice:
+            if self.isLongLot():
+                marketPrice = min(marketPrice, limitStartPrice)
+            if self.isShortLot():
+                marketPrice = max(marketPrice, limitStartPrice)
         if self.gridLotLevelPercent:
             # Calculate geometric prices
             if self.isLongLot() or self.isStartLot():
