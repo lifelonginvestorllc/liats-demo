@@ -91,7 +91,7 @@ class LifelongInvestorMain(LIAlgorithm):
         # self.SetEndDate(date(2024, 12, 31))
         # 2025 annual performance: short(?); long(262/-24.94%/-65.5%/15mins/25K) -> (270/-10.35%/-59.0%/5mins/25K)
         self.SetStartDate(date(2025, 1, 1))
-        self.SetEndDate(date(2025, 6, 6))
+        self.SetEndDate(date(2025, 7, 1))
         # self.SetStartDate(datetime.now() - timedelta(days=365))
         # self.SetEndDate(datetime.now())
 
@@ -1599,11 +1599,15 @@ class LifelongInvestorMain(LIAlgorithm):
         # self.SetEndDate(date(2022, 12, 31))
         # self.SetStartDate(date(2023, 7, 18))
         # self.SetEndDate(date(2023, 11, 18))
-        self.SetStartDate(date(2024, 3, 1))
-        self.SetEndDate(date(2024, 6, 1))
+        # self.SetStartDate(date(2023, 1, 1))
+        # self.SetEndDate(date(2024, 12, 31))
+        self.SetStartDate(date(2025, 1, 1))
+        self.SetEndDate(date(2025, 6, 1))
 
         configs = {
             LIConfigKey.aliasName: "USTech",
+            LIConfigKey.monitorPeriod: 1,
+            LIConfigKey.resolution: LIResolution.HOUR,
             LIConfigKey.extendedMarketHours: True,
             LIConfigKey.fetchHistoryBarData: False,
             LIConfigKey.closeWithStopOrderType: True,  # Perform better!
@@ -1614,6 +1618,7 @@ class LifelongInvestorMain(LIAlgorithm):
             LIConfigKey.gridRetainOpenedLots: 8,
             LIConfigKey.gridLotStopProfitFactors: (0.5, 0.5),
             # LIConfigKey.gridRealignOpenPositions: True,
+            LIConfigKey.gridRealignForMaxHolding: True,
             # LIConfigKey.gridResetLotsMetadata: True,
             # LIConfigKey.gridFixedStartPrices: {LIGridSide.BTD: 80},
             LIConfigKey.gridInitializeSession: True,  # Be careful! (mostly used in backtest)

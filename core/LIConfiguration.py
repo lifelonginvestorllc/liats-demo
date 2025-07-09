@@ -172,6 +172,7 @@ class LIDefault:
     gridCloseCounterpartLots = False
     gridFixLeakingPositions = False
     gridRealignOpenPositions = False
+    gridRealignForMaxHolding = False
     gridLotsInStopProfitFactor = True
     gridPriceInStopProfitFactor = False
     gridCancelOrdersAfterClosed = False
@@ -335,6 +336,7 @@ class LIConfigKey:
     gridCloseCounterpartLots = "gridCloseCounterpartLots"  # Allow to close all counterpart lots when this trading side filled the first open order ticket within a contrarian strategy.
     gridFixLeakingPositions = "gridFixLeakingPositions"  # Will buy/sell opposite amount of leaking positions to restore the grid in a good shape.
     gridRealignOpenPositions = "gridRealignOpenPositions"  # While starting grid trading session, force to recalculate the start prices to retain all open positions, also realign/reset/assign the filled open positions to grid lots evenly.
+    gridRealignForMaxHolding = "gridRealignForMaxHolding"  # Realign open positions on daily basis if the investAmount.maxHolding been specified, will reduce drawback and profit a bit too!
     gridLotsInStopProfitFactor = "gridLotsInStopProfitFactor"  # Calculate stop profit factor based on the total filled lots, in an addition to each lot id. The more lots filled the bigger factor, but still within gridLotStopProfitFactors!
     gridPriceInStopProfitFactor = "gridPriceInStopProfitFactor"  # Adjust stop profit factor based on the distance between market price and start price, the bigger distance the bigger factor for contrarian mode, opposite for momentum mode, but still within gridLotStopProfitFactors!
     gridCancelOrdersAfterClosed = "gridCancelOrdersAfterClosed"  # Cancel open orders right after closed a lot in favor of filling back open orders/positions sooner/easier in contrarian mode.

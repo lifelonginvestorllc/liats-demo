@@ -1573,6 +1573,9 @@ class LIGridTrading(LIGridBase):
         if symbol == self.getSymbol():
             if self.saveMetadataAtEnd and isLiveMode():
                 self.storeGridMetadata(logging=False)
+            if self.gridRealignForMaxHolding and self.investAmount.maxHolding:
+                self.realignOpenPositions(forceOnDemand=True, resetFilledLots=True)
+                # self.realignOpenPositions(forceOnDemand=True, resetFilledLots=False)
             super().onEndOfDay(symbol)
 
     def onEndOfAlgorithm(self):

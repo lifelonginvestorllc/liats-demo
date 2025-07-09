@@ -114,6 +114,7 @@ class LIGridBase(LITrading):
         self.gridCloseCounterpartLots = configs.get(LIConfigKey.gridCloseCounterpartLots, LIDefault.gridCloseCounterpartLots)
         self.gridFixLeakingPositions = configs.get(LIConfigKey.gridFixLeakingPositions, LIDefault.gridFixLeakingPositions)
         self.gridRealignOpenPositions = configs.get(LIConfigKey.gridRealignOpenPositions, LIDefault.gridRealignOpenPositions)
+        self.gridRealignForMaxHolding = configs.get(LIConfigKey.gridRealignForMaxHolding, LIDefault.gridRealignForMaxHolding)
         self.gridRestartOnFridayClose = configs.get(LIConfigKey.gridRestartOnFridayClose, LIDefault.gridRestartOnFridayClose)
         self.gridRestartIfAllLotsPaused = configs.get(LIConfigKey.gridRestartIfAllLotsPaused, LIDefault.gridRestartIfAllLotsPaused)
         self.gridPauseTradingProfitHours = configs.get(LIConfigKey.gridPauseTradingProfitHours, LIDefault.gridPauseTradingProfitHours)
