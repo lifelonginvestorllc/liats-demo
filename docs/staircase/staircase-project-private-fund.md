@@ -94,17 +94,17 @@
 - <img src="2024-annual-performance-chart.png" alt="2024年度回测图表" width="1200"/>
 - <img src="2024-annual-performance-result.png" alt="2024年度回测结果" width="1200"/>
 
-### 2025五个月回测
+### 2025五个月回测（关税风波）
 
 - <img src="2025-5months-performance-chart.png" alt="2025五个月回测图表" width="1200"/>
 - <img src="2025-5months-performance-result.png" alt="2025五个月回测结果" width="1200"/>
 
-### 2025五个月顺势交易回测
+### 2025五个月顺势交易回测（关税风波）
 
 - <img src="2025-5months-trending-chart.png" alt="2025五个月顺势回测图表" width="1200"/>
 - <img src="2025-5months-trending-result.png" alt="2025五个月顺势回测结果" width="1200"/>
 
-### 2025六个月通道交易回测
+### 2025六个月通道交易回测（关税风波）
 
 - <img src="2025-6months-banding-chart.jpg" alt="2025六个月顺势回测图表" width="1200"/>
 - <img src="2025-6months-results-chart.jpg" alt="2025六个月顺势回测结果" width="1200"/>
