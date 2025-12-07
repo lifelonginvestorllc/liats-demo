@@ -1,5 +1,14 @@
 #!/bin/bash
 
+# Check if current path equals ~/lean, exit if not
+EXPECTED_PATH="$HOME/lean"
+CURRENT_PATH=$(pwd)
+if [[ "$CURRENT_PATH" != "$EXPECTED_PATH" ]]; then
+  echo -e "\033[0;31mScript must be run under ~/lean directory\033[0m"
+  echo -e "\033[0;35mCurrent path: $CURRENT_PATH; Expected path: $EXPECTED_PATH\033[0m"
+  exit 0
+fi
+
 if [ -z "$1" ]; then
   echo "Please specify the account name! e.g. LifelongPaper"
   exit 1
@@ -54,11 +63,18 @@ if [ -n "${QC_USER}" ]; then
   source "${SCRIPT_DIR}"/login "${QC_USER}"
 fi
 
+# Set API token if setPortfolioRepute(...) is specified in main.py
+MATCHED_LINE=$(grep -E -n "^\s*setPortfolioRepute\(.+\)\s*$" "${ACCOUNT_CONFIG}"/${MAIN_CODE})
+if [ -n "${MATCHED_LINE}" ]; then
+  CLOUD_ID=$(grep -Ei 'cloud-id' "${ACCOUNT_CONFIG}"/${CONFIG_FILE} | grep -oEi '\d+')
+  source "${SCRIPT_DIR}"/set-api-token "${CLOUD_ID}/live/webApiToken" "${WEB_API_USER}" "${WEB_API_PWD}" true
+fi
+
 # Go back to lean home dir
 cd "${PROJECT_DIR}"/.. || exit
 
 # Sync to live project dir
-rsync -a --delete "${PROJECT_DIR}"/ "${ACCOUNT_PROJECT}"/
+rsync -a --delete --exclude-from="${PROJECT_DIR}"/.leanignore "${PROJECT_DIR}"/ "${ACCOUNT_PROJECT}"/
 
 # Copy over main/config files
 cp "${ACCOUNT_CONFIG}"/${MAIN_CODE} "${ACCOUNT_PROJECT}"/${MAIN_CODE}
@@ -70,32 +86,45 @@ lean cloud push --project "${ACCOUNT}"
 lean cloud pull --project "${ACCOUNT}"
 
 status=$(lean cloud status "${ACCOUNT}")
-echo "Checking project status:"
+echo "Checking project ${ACCOUNT} status: "
 echo "$status"
 
+RETRY_SLEEP_SECONDS=15
 while [[ $status == *"Live status: Running"* ]]
 do
-  echo "Stopping current live project in 20 seconds..."
+  echo -e "\033[0;35mStopping current live project in $RETRY_SLEEP_SECONDS seconds...\033[0m"
   lean cloud live stop "${ACCOUNT}"
-  sleep 20 # Sleep a few seconds
+  sleep $RETRY_SLEEP_SECONDS # Sleep a few seconds
   status=$(lean cloud status "${ACCOUNT}")
-  echo "Checking project status:"
+  echo "Checking project ${ACCOUNT} status: "
   echo "$status"
 done
 
-echo "Please follow below steps to deploy and go live!"
-# --data-provider-live "Interactive Brokers" \
-lean cloud live deploy "${ACCOUNT}" \
-  --node "${ACCOUNT}" \
-  --auto-restart yes \
-  --notify-insights no \
-  --notify-order-events no \
-  --brokerage "Interactive Brokers" \
-  --data-provider-live "QuantConnect" \
-  --ib-weekly-restart-utc-time "22:00:00" \
-  --ib-account "${ACCOUNT_ID}" \
-  --ib-user-name "${USERNAME}" \
-  --ib-password "${PASSWORD}"
+echo -e "\033[0;35mDeploying ${ACCOUNT} to QuantConnect cloud now...\033[0m"
+while true; do
+  status=$(lean cloud live deploy "${ACCOUNT}" \
+    --node "${ACCOUNT}" \
+    --auto-restart yes \
+    --notify-insights no \
+    --notify-order-events no \
+    --brokerage "Interactive Brokers" \
+    --data-provider-live "${DATA_PROVIDER:-QuantConnect}" \
+    --ib-weekly-restart-utc-time "22:00:00" \
+    --ib-account "${ACCOUNT_ID}" \
+    --ib-user-name "${USERNAME}" \
+    --ib-password "${PASSWORD}")
+  # Check if status contains "Deployment completed successfully!"
+  seconds=$(echo "$status" | grep -o '[0-9]\+ seconds' | awk '{print $1}')
+  # If seconds is empty or 0, break the loop
+  if [[ -z "$seconds" || "$seconds" -eq 0 ]]; then
+    echo "Deployment completed successfully!"
+    break
+  fi
+  # Otherwise, retry after sleeping for the specified seconds
+  echo "$status"
+  echo -e "\033[0;35mRetrying deployment in $seconds seconds...\033[0m"
+  sleep "$seconds"
+done
 
 # Login back to llc
 if [[ ${QC_USER} != "llc" ]]; then

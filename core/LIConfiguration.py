@@ -1,9 +1,6 @@
-# region imports
-from System import *
+from AlgorithmImports import *
 from core.LICommon import *
 
-
-# endregion
 
 def sendDailyMetadataAlert():
     LIGlobal.sendDailyMetadataAlert = True
@@ -24,10 +21,10 @@ def checkDefaultSettings():
 class LIDefault:
     verbose = False
     aliasName = None
-    resolution = LIResolution.MINUTE
+    warmupAlgo = True
     marketBias = LIMarketBias.NEUTRAL
-    monitorPeriod = 5
-    indicatorPeriod = 60
+    monitorPeriod = (5, LIResolution.MINUTE)
+    indicatorPeriod = (1, LIResolution.HOUR)
     # Trading indicator
     signalPeriod = 9
     fastEMAPeriod = 13
@@ -35,20 +32,13 @@ class LIDefault:
     longEMAPeriod = 147
     dailyEMAPeriod = 21
     auxRSIPeriod = 13
-    # Hedging indicator
-    # signalPeriod = 30  # 21, 22, 26 could be better
-    # fastEMAPeriod = 50
-    # slowEMAPeriod = 200
-    # longEMAPeriod = None
-    # dailyEMAPeriod = None
-    # auxRSIPeriod = 14
     heikinAshiPlies = None
+    skipWeekendDays = False
     addVolumeSeries = False
     plotDefaultChart = True
     isVolatilePeriod = False
     signalSymbolStr = None
     signalSecurityType = None
-    benchmarkSymbolStr = None
     enableAutoRollover = True
     forceExchangeOpen = False
     extendedMarketHours = True
@@ -56,11 +46,12 @@ class LIDefault:
     fetchHistoryBarData = True
     canOpenLongPosition = True
     canOpenShortPosition = True
-    futureQuarterly = None
-    futurePeriodDays = 98
-    futureRolloverDays = 1
+    futurePeriodDays = 100
+    futureRolloverDays = 5
     futureContractCode = None
     futureContractExpiry = None
+    futureContractMarket = Market.CME
+    futureExpirationCycles = None
     optionRight = None
     putContractCode = None
     callContractCode = None
@@ -84,17 +75,23 @@ class LIDefault:
     dayTradePerOrderPauseMins = 0  # 0 means no pausing
     stopTradingOnInvalidOrders = 10  # 0 means no stopping
     canTradeAtMarketClosingTime = True
-    liquidateRemovedSecurity = True
+    pauseTradingProfitLossHours = None
+    liquidateBaselinePrice = None
     liquidateAndStopTrading = False
+    liquidateRemovedSecurity = True
     liquidateWithStopOrderType = False
+    liquidateLossAndBackfillEquity = None
+    liquidateBackfillOnProfitPercent = None
     liquidateOnMarginCall = False
     liquidateOnFridayClose = False
     liquidateOnReachedPrices = None
     liquidateOnStopLossAmount = None
     liquidateOnStopLossPercent = None
+    flipSignalAtLiquidateFactor = None
     liquidateOnTakeProfitAmount = None
     liquidateOnTakeProfitAmounts = None
     liquidateOnTakeProfitPercent = None
+    liquidateOnSignalTypeFlipped = False
     liquidateByTrailingProfitPercent = None
     liquidateAtMarketClosingTime = 0  # 0(False), 1(True), 2(Only on Gain), 3(Only on Loss)
     liquidateLossAndLimitTrading = False
@@ -107,12 +104,14 @@ class LIDefault:
     dayOpenGapUpDownPercent = 4
     scalpingWindowStartTime = "09:34"
     scalpingWindowStopTime = "10:11"
+    candlestickBodyTolerance = 0.01
     candlestickDojiBodyMaxRatio = 0.0666
     candlestickSpinningTopBodyMaxRatio = 0.333
     shortToLongInverseSymbol = None
     macdIndicatorTolerance = 5  # 5 - 10
+    weeklyTrendingSignals = None  # {date(2024, 4, 1): LISignalType.SHORT, date(2024, 4, 29): LISignalType.LONG}
     bollingerBandsParams = None  # [(300, 1), (300, 2), (300, 3, LIResolution.HOUR)]
-    stochasticComboParams = None  # {"MACD": (12, 26, 5), "RSI": 14, "KDJ": (14, 3, 3), "SRSI": (14, 14, 3, 3)},
+    comboTrendingParams = None  # {"MACD": (12, 26, 5), "RSI": 14, "KDJ": (14, 3, 3), "SRSI": (14, 14, 3, 3)},
     investAmountTierFactors = None  # [4, 3, 2, 1, 1, 2, 3, 4]
     monitorPeriodTierFactors = None  # [1, 2, 3, 6, 12, 12, 12, 12]
     takeProfitAmountTierFactors = None  # [1, 1, 1, 1, 1, 1, 1, 1]
@@ -128,11 +127,10 @@ class LIDefault:
     gridShortLotsQty = None
     gridSortSkewedLots = True
     gridHeikinAshiPlies = None
-    gridUseTradeInsight = False
-    gridBaselinePrice = None
     gridLimitStartPrices = None
     gridResetStartPrices = None
     gridFixedStartPrices = None
+    gridSignalStartPrices = None
     gridFixedOpenFromPrices = None
     gridBandingStartPrices = None
     gridBandingOpenFromPrices = None
@@ -152,6 +150,8 @@ class LIDefault:
     gridLotPauseAfterStopLoss = False
     gridLotBoostingProfitFactor = None
     gridLotBoostingDesireProfit = False
+    gridLotOpenUponTradeInsight = False
+    gridLotCloseUponTradeInsight = False
     gridRestartOnFridayClose = False
     gridRestartIfAllLotsPaused = False
     gridInitOpenedLots = 0  # Disabled
@@ -165,7 +165,7 @@ class LIDefault:
     gridKeepStartCloseOrders = 1
     gridFollowAdverseTrend = False
     gridStickToMarketTrend = False
-    gridCancelOrdersOnExit = False
+    gridCancelOrdersOnExit = True
     gridNotifyTargetPrices = True
     gridMonitorPeriodFactors = None
     gridTransfer2Counterpart = False
@@ -177,7 +177,6 @@ class LIDefault:
     gridPriceInStopProfitFactor = False
     gridCancelOrdersAfterClosed = False
     gridTrailingOpenPriceFactor = None
-    gridPauseTradingProfitHours = None
     gridBoostingKeepTrading = False
     gridBoostingTriggerAmount = None
     gridBoostingTriggerPercent = None
@@ -192,6 +191,7 @@ class LIDefault:
 class LIConfigKey:
     verbose = "verbose"  # Whether to log more details!
     aliasName = "aliasName"  # An easy to recognize name
+    warmupAlgo = "warmupAlgo"  # Warmup right after deployment
     resolution = "resolution"  # Resolution of market data requested
     marketBias = "marketBias"  # Forecast market bias to drive indicator
     monitorPeriod = "monitorPeriod"  # The minimum span of time before emitting a consolidated bar
@@ -202,13 +202,13 @@ class LIConfigKey:
     slowEMAPeriod = "slowEMAPeriod"  # Slow EMA period for an indicator
     longEMAPeriod = "longEMAPeriod"  # Long EMA Period for an indicator
     dailyEMAPeriod = "dailyEMAPeriod"  # Daily EMA period for a daily indicator
-    heikinAshiPlies = "heikinAshiPlies"  # Use Heikin-Ashi with specific plies to smooth candlestick first
-    addVolumeSeries = "addVolumeSeries"  # Whether to add Volume bar at the bottom of the chart
+    heikinAshiPlies = "heikinAshiPlies"  # Use Heikin-Ashi with specific plies to smooth candlestick first (>=1)
+    skipWeekendDays = "skipWeekendDays"  # Whether to skip weekend days (Saturday or Sunday) in indicator calculation
+    addVolumeSeries = "addVolumeSeries"  # Whether to add Volume bar at the bottom of the indicator chart
     plotDefaultChart = "plotDefaultChart"  # Whether to plot the default chart with market/order prices
     isVolatilePeriod = "isVolatilePeriod"  # Whether the signal symbol is in a high volatile period, e.g. 3x Leveraged ETF
     signalSymbolStr = "signalSymbolStr"  # Alternative signal symbol's string to populate the indicator
     signalSecurityType = "signalSecurityType"  # Alternative signal symbol's security type for the indicator
-    benchmarkSymbolStr = "benchmarkSymbolStr"  # Add a relevant benchmark for computing statistics of the algorithm to the specified ticker
     enableAutoRollover = "enableAutoRollover"  # Rollover metadata and holdings (with market order) for this removed/expired contract to next one
     forceExchangeOpen = "forceExchangeOpen"  # Override or force exchange open to be True or False for this security until disabled!
     extendedMarketHours = "extendedMarketHours"  # Extended market hours could mean trading 24hrs around the clock
@@ -216,11 +216,12 @@ class LIConfigKey:
     fetchHistoryBarData = "fetchHistoryBarData"  # Stop fetching history bar data if not required for this strategy, in order to avoid the error: No market data permissions for CME FUT...
     canOpenLongPosition = "canOpenLongPosition"  # Indicate whether allow to open Long position
     canOpenShortPosition = "canOpenShortPosition"  # Indicate whether allow to open Short position
-    futureQuarterly = "futureQuarterly"  # Contract Quarterly Cycle: Expirations in March, June, September, December (third month), will calculate by futurePeriodDays if not specified
     futurePeriodDays = "futurePeriodDays"  # Contract's period term, could be Weekly (~7 days), Monthly (~30 days), Quarterly (~90 days), Yearly (~365 days)
-    futureRolloverDays = "futureRolloverDays"  # Contract should be rolled over within these days, make sure contract.Expiry - timedelta(self.futureRolloverDays) > currentTime
+    futureRolloverDays = "futureRolloverDays"  # Contract should be rolled over within these days, make sure contract.expiry - timedelta(self.futureRolloverDays) > currentTime
     futureContractCode = "futureContractCode"  # Optional, within futurePeriodDays, pick a future contract identifier for this strategy (e.g. MNQ15U23, CL22K24)
     futureContractExpiry = "futureContractExpiry"  # Optional, within futurePeriodDays, pick a future contract expiry date for this strategy (e.g. date(2024, 9, 20))
+    futureContractMarket = "futureContractMarket"  # Optional, specify the exchange/market for this future contract (e.g. CME, CBOT, NYMEX, ICE, COMEX)
+    futureExpirationCycles = "futureExpirationCycles"  # Optional, specify the expiration cycles for this future contract (e.g. [FutureExpirationCycle.MARCH, FutureExpirationCycles.HKNUZ])
     optionRight = "optionRight"  # Options right could be either put or call, but NOT both! You can combine a put strategy and a call strategy to trade on both sides
     putContractCode = "putContractCode"  # Optional, specify a preselected put option contract identifier for this strategy
     callContractCode = "callContractCode"  # Optional, specify a preselected call option contract identifier for this strategy
@@ -235,7 +236,7 @@ class LIConfigKey:
     openWithStopOrderType = "openWithStopOrderType"  # Leverage stop limit/market order or trailing stop order to open positions, please mind the live market slippage, might not efficient as market order. NOTE: stop limit order not working for extend market time!
     openWithMarketOrderType = "openWithMarketOrderType"  # Use (limit) market order to open positions whenever it's suitable/applicable, please mind the live market slippage
     closeWithStopOrderType = "closeWithStopOrderType"  # Leverage stop limit/market order or trailing stop order to close positions, please mind the live market slippage, might not efficient as market order. NOTE: stop limit order not working for extend market time!
-    closeWithMarketOrderType = "closeWithMarketOrderType"  # Use (limit) market order to close positions, please mind the live market slippage
+    closeWithMarketOrderType = "closeWithMarketOrderType"  # Use (limit) market order to close positions, please mind the live market slippage, might fulfill order with unfavorable price.
     enableTrailingStopLoss = "enableTrailingStopLoss"  # Manage a stop limit/market order with dynamically calculated (by Algo or Brokerage) trailing stop price
     submitStopMarketOrder = "submitStopMarketOrder"  # Submit stop market order directly, use Brokerage to submit market price once triggered the stop price
     submitTrailingStopOrder = "submitTrailingStopOrder"  # Submit trailing stop (limit) order directly, use Brokerage to manage the trailing stop price
@@ -244,9 +245,14 @@ class LIConfigKey:
     dayTradePerOrderPauseMins = "dayTradePerOrderPauseMins"  # Increase waiting/pausing time exponentially based on dayTradeOrderCount
     stopTradingOnInvalidOrders = "stopTradingOnInvalidOrders"  # Stop trading after reached/exceeded the max number of invalid orders
     canTradeAtMarketClosingTime = "canTradeAtMarketClosingTime"  # Indicate whether allow to trade at market closing time
+    pauseTradingProfitLossHours = "pauseTradingProfitLossHours"  # Pause trading for specified hours after liquidated and took specified amount of profit or above. e.g. (10_000, 3 * 24)
+    liquidateBaselinePrice = "liquidateBaselinePrice"  # Can be used to adjust liquidate amount dynamically: amount = amount * (marketPrice / liquidateBaselinePrice)
     liquidateAndStopTrading = "liquidateAndStopTrading"  # Liquidate this invested security and pause/stop trading for now, wait for next redeploy!
+    liquidateWithStopOrderType = "liquidateWithStopOrderType"  # Liquidate with stop limit/market order or trailing stop order, please mind the live market slippage, might not efficient as market order. NOTE: stop limit order not working for extend market time!
     liquidateLossAndLimitTrading = "liquidateLossAndLimitTrading"  # Liquidate loss and limit the trading until market revert back to stoppedLossPrices!
     liquidateLossAndRestartTrading = "liquidateLossAndRestartTrading"  # Liquidate loss and restart the trading session with fresh settings!
+    liquidateLossAndBackfillEquity = "liquidateLossAndBackfillEquity"  # Liquidate loss and backfill equity with the same amount automatically!
+    liquidateBackfillOnProfitPercent = "liquidateBackfillOnProfitPercent"  # Liquidate backfill equity once reached the specified profit percent!
     liquidateProfitAndRestartTrading = "liquidateProfitAndRestartTrading"  # Liquidate profit and restart the trading session with fresh settings!
     liquidateRemovedSecurity = "liquidateRemovedSecurity"  # Liquidate the removed security automatically in position manager by default!
     liquidateOnMarginCall = "liquidateOnMarginCall"  # Liquidate this security's all positions and quit algorithm upon receiving the first margin call! Need to study current market situation and decide next step.
@@ -254,10 +260,11 @@ class LIConfigKey:
     liquidateOnReachedPrices = "liquidateOnReachedPrices"  # Liquidate if current session's either side's reference price reached specified price, and then restart or redeploy!
     liquidateOnStopLossAmount = "liquidateOnStopLossAmount"  # Liquidate if current session's combined loss reached this amount! (e.g. 10_000), and then restart or redeploy!
     liquidateOnStopLossPercent = "liquidateOnStopLossPercent"  # Liquidate if current session's combined loss reached this percent! (e.g. 10=10%) and the restart or redeploy!
+    flipSignalAtLiquidateFactor = "flipSignalAtLiquidateFactor"  # Flip the signal type to opposite side once exceeded the specified factor of stop loss amount/percent! (e.g. 0.5=50%)
     liquidateOnTakeProfitAmount = "liquidateOnTakeProfitAmount"  # Liquidate if current session's combined profit reached this amount, and then restart or redeploy! (e.g. 10_000=$10,000)
     liquidateOnTakeProfitAmounts = "liquidateOnTakeProfitAmounts"  # Liquidate if current session's combined profit reached this side's amount, and then restart or redeploy! (e.g. {LIGridSide.BTU:1_000, LIGridSide.STD: 2_000}})
     liquidateOnTakeProfitPercent = "liquidateOnTakeProfitPercent"  # Liquidate if current session's combined profit reached this percent, and then restart or redeploy! (e.g. 10=10%)
-    liquidateWithStopOrderType = "liquidateWithCloseOrderType"  # Liquidate with stop limit/market order or trailing stop order, please mind the live market slippage, might not efficient as market order. NOTE: stop limit order not working for extend market time!
+    liquidateOnSignalTypeFlipped = "liquidateOnSignalTypeFlipped"  # Liquidate if the trade insight signal type flipped from Long to Short or Short to Long, and then restart or redeploy!
     liquidateByTrailingProfitPercent = "liquidateByTrailingProfitPercent"  # An extra trailing stop percent applied on top of above liquidate amount/percent, allow specific percent of drawback in favor of maximizing the profit.
     liquidateAtMarketClosingTime = "liquidateAtMarketClosingTime"  # Liquidate managed/invested securities at around marketClosingTime. Value: 0(False), 1(True), 2(Only on Gain), 3(Only on Loss)
     limitOrderJitterTicks = "limitOrderJitterTicks"  # Allow limit order to jitter by specified ticks to soft or hard the order price
@@ -270,12 +277,14 @@ class LIConfigKey:
     scalpingWindowStopTime = "scalpingWindowStopTime"  # Doing scalping strategy within this time window
     candlestickAvgBodySize = "candlestickAvgBodySize"  # Calculate dynamically if not specified
     candlestickAvgWickSize = "candlestickAvgWickSize"  # Calculate dynamically if not specified
+    candlestickBodyTolerance = "candlestickBodyTolerance"  # Minimum body size to consider as valid body
     candlestickDojiBodyMaxRatio = "candlestickDojiBodyMaxRatio"  # 0.01=1%, Less than or equals to this percent of average body size
     candlestickSpinningTopBodyMaxRatio = "candlestickSpinningTopBodyMaxRatio"  # 0.1=10%, Not Doji, but less than or equals to this percent of average body size
     shortToLongInverseSymbol = "shortToLongInverseSymbol"  # Never short, instead to long inverse symbol
     macdIndicatorTolerance = "macdIndicatorTolerance"  # MACD indicator threshold for histogram or divergence
+    weeklyTrendingSignals = "weeklyTrendingSignals"  # A map of weekly trending signals, {date(2024, 4, 1): LISignalType.SHORT, date(2024, 4, 29): LISignalType.LONG}, defined in indicator/LIWeeklyTrendingSignals.py
     bollingerBandsParams = "bollingerBandsParams"  # A list of bollinger bands params which can specify the period of moving average, the standard deviation (the distance between middle and upper or lower bands) and resolution (daily by default).
-    stochasticComboParams = "stochasticComboParams"  # Specify the params for all supported indicators in map, e.g. {"EMA": 200, "MACD": (12, 26, 5), "RSI": 14, "KDJ": (14, 3, 3), "SRSI": (14, 14, 3, 3)}
+    comboTrendingParams = "comboTrendingParams"  # Specify the params for all supported indicators in map, e.g. {"EMA": 200, "MACD": (12, 26, 5), "RSI": 14, "KDJ": (14, 3, 3), "SRSI": (14, 14, 3, 3)}
     investAmountTierFactors = "investAmountTierFactors"  # A list of factors for each tier/band, usually equals to bollingerBandsParams * 2 + 1. Trading with different invest amounts as per band.
     monitorPeriodTierFactors = "monitorPeriodTierFactors"  # A list of factors for each tier/band, usually equals to bollingerBandsParams * 2 + 1. Trading with different monitor periods as per band.
     takeProfitAmountTierFactors = "takeProfitAmountTierFactors"  # A list of factors for each tier/band, usually equals to bollingerBandsParams * 2 + 1. Trading with different take profit amount as per band.
@@ -291,16 +300,15 @@ class LIConfigKey:
     gridShortLotsQty = "gridShortLotsQty"  # Optional, specify each short lot's quantity to overwrite the default lotQuantity (e.g. [1, 1, 2, 2, 3, 3])
     gridSortSkewedLots = "gridSortSkewedLots"  # Sort skewed lots by filled/open price automatically so that they will be closed in order as well
     gridHeikinAshiPlies = "gridHeikinAshiPlies"  # Use Heikin Ashi with specific plies to smooth the trading bars, hence the high/low/open/close prices
-    gridUseTradeInsight = "gridUseTradeInsight"  # Use trade insight (market bias or emitted by indicators) to decide open/close orders
     gridStartPrices = "gridStartPrices"  # Current grid start prices for trading, to be updated dynamically as per strategy
-    gridBaselinePrice = "gridBaselinePrice"  # Baseline prices can be used to adjust the lot level amount or liquidate amount dynamically: amount = amount * (marketPrice / baselinePrice)
-    gridLimitStartPrices = "gridLimitStartPrices"  # Limit start prices exceeding the boundary/stop prices, make sure Long lot's startPrice <= maxHighPrice and Short lot's startPrice >= minLowPrice. (e.g. {LIGridSide.BTD: 12400.0})
+    gridLimitStartPrices = "gridLimitStartPrices"  # Limit start prices exceeding the boundary/capped prices, make sure Long lot's startPrice <= maxHighPrice and Short lot's startPrice >= minLowPrice. (e.g. {LIGridSide.BTD: 12400.0})
     gridResetStartPrices = "gridResetStartPrices"  # Need to deploy twice for live mode! first to reset start prices and quit algorithm, then remove it and redeploy to continue. (e.g. {LIGridSide.BTD: 12346.0} or {} to use market price)
     gridFixedStartPrices = "gridFixedStartPrices"  # Adjust the fixed start prices as per specified bollinger bands. Also refer to gridFixedStartPrices. e.g. {LIGridSide.BTD: "band-#1-lower", LIGridSide.STU: "band-#1-upper"}
+    gridSignalStartPrices = "gridSignalStartPrices"  # Reset the start prices as per the trading signal changed. If signal is flipped to LONG, set start price BTD to current market price, and vice versa for SHORT.
     gridFixedOpenFromPrices = "gridFixedOpenFromPrices"  # Start placing open orders from the specified prices, so that we can wait patiently for market to reach a certain price before long or short.
     gridBandingStartPrices = "gridBandingStartPrices"  # Keep adjusting the fixed start prices dynamically according to bollinger bands indicator, so to follow the market trend closely on some loss.
     gridBandingOpenFromPrices = "gridBandingOpenFromPrices"  # Start opening lot's positions from the specified band's price, so that we can wait patiently for market to reach a certain price before long or short.
-    gridBandingLimitStartPrices = "gridBandingLimitStartPrices"  # Adjust the limit start prices as per specified bollinger bands. Also refer to gridLimitStartPrices. e.g. {LIGridSide.BTD: "band-#2-lower", LIGridSide.STU: "band-#2-upper"}
+    gridBandingLimitStartPrices = "gridBandingLimitStartPrices"  # Adjust the limit/capped start prices as per specified bollinger bands. Also refer to gridLimitStartPrices. e.g. {LIGridSide.BTD: "band-#2-lower", LIGridSide.STU: "band-#2-upper"}
     gridResetLotsMetadata = "gridResetLotsMetadata"  # Simply remove <Prefix>/gridLotsMetadata (could be skewed) in order to start over with current session and reset filled open prices and positions.
     gridRolloverCriteria = "gridRolloverCriteria"  # Algo could fail to figure out the rollover criteria, It's to specify contract, how many grid lots, invested quantity, profit loss to rollover. (e.g. (MNQ21H25, 3, 3 * 2, -10000))
     gridInitializeSession = "gridInitializeSession"  # Need to deploy twice for live mode! first to initialize a new session, liquidate open positions, delete metadata and reset all grid lots, then remove it and redeploy to continue!
@@ -316,6 +324,8 @@ class LIConfigKey:
     gridLotPauseAfterStopLoss = "gridLotPauseAfterStopLoss"  # Pause trading for this lot once got a stop loss, until restart a new grid trading session.
     gridLotBoostingProfitFactor = "gridLotBoostingProfitFactor"  # Fill more if the lot reached the specified profit factor (e.g. percent = gridLotLevelPercent (gridLotLevelAugment|gridLotStopProfitFactors) * factor), it's a way to blend momentum into contrarian.
     gridLotBoostingDesireProfit = "gridLotBoostingDesireProfit"  # Prefer to take profit earlier by setting dynamic stop profit down to the take profit price. But it could reduce the potential profit.
+    gridLotOpenUponTradeInsight = "gridLotOpenUponTradeInsight"  # Open grid lots immediately upon receiving trade insight, instead of waiting for next level to open.
+    gridLotCloseUponTradeInsight = "gridLotCloseUponTradeInsight"  # Close grid lots immediately upon receiving trade insight, instead of waiting for the next level to open.
     gridRestartOnFridayClose = "gridRestartOnFridayClose"  # Restart grid session at the end of Friday's market time, will reset start prices and start a new session!
     gridRestartIfAllLotsPaused = "gridRestartIfAllLotsPaused"  # Restart a new grid trading session after all lots (the same long or short side) were paused.
     gridFollowAdverseTrend = "gridFollowAdverseTrend"  # Once the grid is fully filled with all long/short lots, allow to push/force the start prices to further down/up, therefore sell some losing positions in order to catch up with the even unfavorable/adverse trending!
@@ -341,7 +351,6 @@ class LIConfigKey:
     gridPriceInStopProfitFactor = "gridPriceInStopProfitFactor"  # Adjust stop profit factor based on the distance between market price and start price, the bigger distance the bigger factor for contrarian mode, opposite for momentum mode, but still within gridLotStopProfitFactors!
     gridCancelOrdersAfterClosed = "gridCancelOrdersAfterClosed"  # Cancel open orders right after closed a lot in favor of filling back open orders/positions sooner/easier in contrarian mode.
     gridTrailingOpenPriceFactor = "gridTrailingOpenPriceFactor"  # Limit the lot's open price distance from market price in favor of filling back open orders/positions sooner/easier in contrarian mode, could be very aggressive if set to a smaller factor.
-    gridPauseTradingProfitHours = "gridPauseTradingProfitHours"  # Pause trading for specified hours after liquidated and took specified amount of profit or above. e.g. (10_000, 3 * 24)
     gridBoostingKeepTrading = "gridBoostingKeepTrading"  # Do not stop trading after triggered the stop profit criteria and liquidated all positions
     gridBoostingTriggerAmount = "gridBoostingTriggerAmount"  # Acquire more positions once reached this profit amount and hold until trigger trailing stop profit, longSideAmount = marketPrice - avgFilledPrice, shortSideAmount = avgFilledPrice - marketPrice
     gridBoostingTriggerPercent = "gridBoostingTriggerPercent"  # Acquire more positions once reached this profit percent and hold until trigger trailing stop profit, percent = aboveAmount / marketPrice * 100

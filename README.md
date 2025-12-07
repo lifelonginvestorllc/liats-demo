@@ -30,7 +30,17 @@
 - Refer to Lean CLI Doc: https://www.quantconnect.com/docs/v2/lean-cli/installation/installing-pip
 - Install Anaconda as suggested: https://docs.anaconda.com/anaconda/install/
 - Install or upgrade lean, it's fine to see dependencies conflicts error.
-    - You might need to update `/Users/<Home>/.config/pip/pip.conf`
+    - You might need to update index in `~/.config/pip/pip.conf`
+    - You might need to stop proxy in `~/.zshrc` or `~/.bashrc`
+- If you have SSL issue, please add following sitecustomize.py
+```shell
+cat /$HOME/miniforge3/lib/python3.12/site-packages/sitecustomize.py
+try:
+    import truststore
+    truststore.inject_into_ssl()
+except Exception:
+    pass
+```
 
 ```
 % pip install --upgrade lean
@@ -241,6 +251,16 @@ API_TOKEN=xxxxxxxxxxxxxx
 - Add an IB Trading User without 2-factors authentication been enabled by mistake.
 - While entering your mobile number in your profile, don't choose Yes button for SMS authentication.
 - Also never try to scan the QR code and enable IB Mobile app authentication by mistake.
+
+### Add new user and device to set up IB Key
+
+- If current device is already registered, open IBKR Mobile app and tap the red head and shoulder IB logo 5 times
+![setup_ib_key_0.png](docs/images/setup_ib_key_0.png)
+- It will show following screen and click Remove IB Key Activation Data
+![setup_ib_key_1.png](docs/images/setup_ib_key_1.png)
+- Then we can hit Register Two-Factor Authentication from scratch
+![setup_ib_key_2.png](docs/images/setup_ib_key_2.png)
+- However, this will remove any previous IB key setup with current device. For example, if you use this device to have set up another account in the past, the other account wouldn't work anymore with IB Key. To resolve this, we can click "IB Key Authentication" in the first screenshot above, then click "Add User"->Continue->Enter Login information to activate IB Key for the user.
 
 ### Backtest divergence with live trading
 

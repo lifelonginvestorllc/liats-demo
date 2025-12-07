@@ -1,10 +1,8 @@
-# region imports
+from AlgorithmImports import *
 
 from indicator.LIBollingerBand import *
 from indicator.LIInsightIndicator import *
 
-
-# endregion
 
 class LIBollingerBandsIndicator(LIInsightIndicator):
     """
@@ -32,41 +30,40 @@ class LIBollingerBandsIndicator(LIInsightIndicator):
             signalSymbol = self.securityMonitor.getSymbol()
             for index, params in enumerate(self.bollingerBandsParams):
                 index += 1
-                resolution = getResolution(params[2]) if len(params) > 2 else Resolution.Daily
+                resolution = getResolution(params[2]) if len(params) > 2 else Resolution.DAILY
                 # Simple moving average type performs better for multiple layers of bollinger bands
-                movingAverageType = MovingAverageType.Simple if len(self.bollingerBandsParams) > 2 else MovingAverageType.Exponential
+                movingAverageType = MovingAverageType.simple if len(self.bollingerBandsParams) > 2 else MovingAverageType.EXPONENTIAL
                 # # Use a customized bollinger bands as if the BB one is not working as expected and update it periodically!
                 # bollingerBands = BollingerBands(params[0], params[1], movingAverageType)
                 bollingerBands = getAlgo().BB(signalSymbol, params[0], params[1], movingAverageType, resolution=resolution)
-                bollingerBands.Updated += self.onBollingerBandsUpdated  # Callback to emit trade insights/signals
+                bollingerBands.updated += self.onBollingerBandsUpdated  # Callback to emit trade insights/signals
                 self.bollingerBandsList.append(bollingerBands)
                 if index == 1:  # Add all three bands
-                    bollingerBands.UpperBand.Name = f"band-#{index}-upper"
-                    self.headBand = LIBollingerBand(bollingerBands, bollingerBands.UpperBand)
-                    bollingerBands.MiddleBand.Name = self.middleBandName
-                    middleBand = LIBollingerBand(bollingerBands, bollingerBands.MiddleBand)
+                    bollingerBands.upper_band.name = f"band-#{index}-upper"
+                    self.headBand = LIBollingerBand(bollingerBands, bollingerBands.upper_band)
+                    bollingerBands.middle_band.name = self.middleBandName
+                    middleBand = LIBollingerBand(bollingerBands, bollingerBands.middle_band)
                     self.appendBand(middleBand)
                     self.middleBand = middleBand
-                    bollingerBands.LowerBand.Name = f"band-#{index}-lower"
-                    self.appendBand(LIBollingerBand(bollingerBands, bollingerBands.LowerBand))
+                    bollingerBands.lower_band.name = f"band-#{index}-lower"
+                    self.appendBand(LIBollingerBand(bollingerBands, bollingerBands.lower_band))
                 else:
-                    bollingerBands.UpperBand.Name = f"band-#{index}-upper"
-                    self.prependBand(LIBollingerBand(bollingerBands, bollingerBands.UpperBand))
-                    bollingerBands.MiddleBand.Name = f"band-#{index}-middle"
-                    bollingerBands.LowerBand.Name = f"band-#{index}-lower"
-                    self.appendBand(LIBollingerBand(bollingerBands, bollingerBands.LowerBand))
+                    bollingerBands.upper_band.name = f"band-#{index}-upper"
+                    self.prependBand(LIBollingerBand(bollingerBands, bollingerBands.upper_band))
+                    bollingerBands.middle_band.name = f"band-#{index}-middle"
+                    bollingerBands.lower_band.name = f"band-#{index}-lower"
+                    self.appendBand(LIBollingerBand(bollingerBands, bollingerBands.lower_band))
                 # # Warm up indicator is NOT fetching enough history data for sampling!
-                # getAlgo().WarmUpIndicator(signalSymbol, bollingerBands, resolution=resolution)
-                barType = QuoteBar if useQuoteBar(self.securityMonitor.securityType) else TradeBar
+                # getAlgo().warm_up_indicator(signalSymbol, bollingerBands, resolution=resolution)
                 # To fill the gaps, need more history data to warm up the indicator to be more accurate!
-                for bar in getAlgo().History[barType](signalSymbol, round(bollingerBands.WarmUpPeriod * 1.5), resolution):
-                    # if self.verbose:
-                    #     log(f"{signalSymbol.Value}: History bar of symbol={bar.Symbol.Value}, endTime={bar.EndTime}, {bar}")
+                for bar in self.securityMonitor.getHistoryBars(round(bollingerBands.warm_up_period * 1.5), resolution):
+                    # log(f"{signalSymbol.value}: History bar of symbol={bar.symbol.value}, endTime={bar.end_time}, {bar}", self.verbose)
                     if bollingerBands:
-                        bollingerBands.Update(bar.EndTime, bar.Close)
-                if not bollingerBands.IsReady:
-                    terminate(f"{signalSymbol.Value}: Please warm up the Bollinger Bands with params={params}, samples={bollingerBands.Samples} first!"
+                        bollingerBands.update(bar.end_time, bar.close)
+                if not bollingerBands.is_ready:
+                    terminate(f"{signalSymbol.value}: Please warm up the Bollinger Bands with params={params}, samples={bollingerBands.samples} first!"
                               f" You might need to reduce the periods param in order to have enough history data to warm up the indicator.")
+                self.isWarmedUp = True
 
             self.resetStartBand(self.getMiddleBand().getName())  # by default
 
@@ -78,6 +75,8 @@ class LIBollingerBandsIndicator(LIInsightIndicator):
             elif band.getName() == bandName:
                 return band
             band = band.nextBand
+        # No matching band found
+        return None
 
     def getStartBand(self):
         return self.startBand
@@ -132,7 +131,7 @@ class LIBollingerBandsIndicator(LIInsightIndicator):
             band = band.nextBand
         return prices
 
-    def getBandNames(self) -> []:
+    def getBandNames(self) -> list[str]:
         names = []
         band = self.getHeadBand()
         while band:
@@ -146,24 +145,24 @@ class LIBollingerBandsIndicator(LIInsightIndicator):
         self.rollingWindowBands.append(self.startBand)
 
     def onMonitorBarUpdated(self, bar: Bar):
-        if self.getSymbol() != bar.Symbol:
+        if self.getSymbol() != bar.symbol:
             return
 
-        # self.dataConsolidator.Update(bar)
+        # self.dataConsolidator.update(bar)
         self.updateRollingWindow(bar)
 
-        tradeInsight = self.predictTradeInsight(bar.Time, bar)
+        tradeInsight = self.predictTradeInsight(bar)
         if tradeInsight:
             for listener in self.tradeInsightListeners:
                 listener.onEmitTradeInsight(tradeInsight)
 
     def updateRollingWindow(self, bar: Bar):
-        tradingBand = self.getTradingBand(bar.Close)
+        tradingBand = self.getTradingBand(bar.close)
         # Add the most recent one to first position
         if self.rollingWindowBands[0] != tradingBand:
             self.rollingWindowBands.insert(0, tradingBand)
             self.purgeRollingWindow()
-            log(f"{self.securityMonitor.getSymbolAlias()}: Updated bollinger bands rolling window with marketPrice={bar.Close}, {self}", self.verbose)
+            log(f"{self.securityMonitor.getSymbolAlias()}: Updated bollinger bands rolling window with marketPrice={bar.close}, {self}", self.verbose)
 
     def getTradingBand(self, targetPrice):
         beyondBand = self.middleBand
@@ -193,7 +192,10 @@ class LIBollingerBandsIndicator(LIInsightIndicator):
         else:
             return f"tier-#{self.getTradingBand(targetPrice).getIndex()}-lower"
 
-    def predictTradeInsight(self, timestamp=None, updated=None) -> LITradeInsight:
+    def predictTradeInsight(self, updated: IBaseData) -> LITradeInsight:
+        signalType = LISignalType.NONE
+        timestamp = updated.end_time if updated else getAlgoTime()
+        symbolValue = updated.symbol.value if updated else self.getSymbol().value
         startBand = self.rollingWindowBands[0]
         if startBand.isUpper():
             startBand = startBand.nextBand
@@ -203,10 +205,11 @@ class LIBollingerBandsIndicator(LIInsightIndicator):
             log(f"{self.securityMonitor.getSymbolAlias()}: Emit trade insight to switch start band from {self.startBand} to {startBand}")
             signalType = LISignalType.RISING if startBand.getPrice() > self.startBand.getPrice() else LISignalType.FALLING
             self.startBand = startBand
-            return LITradeInsight(serialId=self.tradeInsight.serialId + 1,
-                                  symbolStr=self.getSymbol().Value,
-                                  signalType=signalType,
-                                  timestamp=timestamp)
+            timestamp = updated.end_time if updated else getAlgoTime()
+        serialId = (self.tradeInsight.serialId if self.tradeInsight else 0) + 1
+        tradeInsight = LITradeInsight(serialId=serialId, symbolValue=symbolValue, signalType=signalType, timestamp=timestamp)
+        log(f"{self.getSymbol().value}: Predicted trade insight: {tradeInsight}.", self.verbose)
+        return tradeInsight
 
     def purgeRollingWindow(self):
         # Remove last/staled/tailing bands!

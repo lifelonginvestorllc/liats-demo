@@ -1,17 +1,15 @@
-# region imports
-import sys
+from AlgorithmImports import *
 from core.LIGridBaseLot import *
 from core.LIPositionManager import *
+from core.LITradeReport import *
 
-
-# endregion
 
 class LIGridTradingLot(LIGridBaseLot):
     def __init__(self, lotId, gridTrading):
         super().__init__(lotId, gridTrading)
 
     def manageLotOrderTickets(self, bar=None, openWithMarketOrder=False, closeWithMarketOrder=False):
-        if not self.positionManager.isExchangeOpen():
+        if self.positionManager.isNotExchangeOpen():
             return False  # Abort, wait for market open!
         result = False
         result = self.manageLotOpenOrderTicket(useMarketOrder=openWithMarketOrder) or result
@@ -19,7 +17,7 @@ class LIGridTradingLot(LIGridBaseLot):
             result = self.manageLotCloseOrderTicket(useMarketOrder=closeWithMarketOrder) or result
         return result
 
-    def getSortedOpenPrice(self, targetPrice, marketPrice, openFromPrice=None, useMarketOrder=False):
+    def getSortedOpenPrice(self, marketPrice, targetPrice, openFromPrice=None, useMarketOrder=False):
         openPrice = targetPrice
         if self.isLongLot():
             if self.isMomentumMode():
@@ -38,21 +36,14 @@ class LIGridTradingLot(LIGridBaseLot):
         return openPrice
 
     def manageLotOpenOrderTicket(self, useMarketOrder=False, boostMorePositions=False):
+        if self.isCommandMode():
+            if self.tradeOrder is None:
+                return False  # Abort, no trade order attached for command mode!
+
         if self.gridTrading.gridNoMoreOpenOrders:
             log(f"{self.getSymbolAlias()}@{self.getLotName()}: Abort placing open order ticket as "
                 f"{LIConfigKey.gridNoMoreOpenOrders}={self.gridTrading.gridNoMoreOpenOrders}", self.verbose)
             return False  # Abort, no more open orders!
-
-        if (self.isLongLot() and self.gridTrading.isBearishBias()) or (self.isShortLot() and self.gridTrading.isBullishBias()):
-            log(f"f{self.getSymbolAlias()}@{self.getLotName()}: Abort placing open order ticket as "
-                f"{LIConfigKey.marketBias}={self.gridTrading.marketBias}", self.verbose)
-            return False  # Abort as against market bias
-
-        if self.gridTrading.gridOpenFromPrices:
-            if self.isMomentumMode() and not self.gridTrading.reachedOpenPrice:
-                log(f"{self.getSymbolAlias()}@{self.getLotName()}: Abort placing open order ticket as marketPrice={self.getMarketPrice()} not reached "
-                    f"gridOpenFromPrices={self.gridTrading.gridOpenFromPrices} yet!", self.verbose)
-                return False
 
         marketPrice = self.getMarketPrice()
         targetPrice = self.getOpenTargetPrice()
@@ -83,19 +74,16 @@ class LIGridTradingLot(LIGridBaseLot):
                         f"unpausePrice={unpausePrice}, marketPrice={marketPrice}, targetPrice={targetPrice}, stopLossPrice={stopLossPrice}.")
                     self.pausedOpening = False  # Enable again
 
-        if self.isPausedOpening():
-            return False  # Abort
+        if self.isPausedOpening() or targetPrice <= 0 or targetQuantity == 0:
+            return False  # Abort, paused or invalid target price or quantity!
 
         if self.hasOpenPosition() and not boostMorePositions:
             return False  # Abort, fully filled!
 
         if self.gridLotMinQuantity and abs(targetQuantity) < self.gridLotMinQuantity:
             log(f"{self.getSymbolAlias()}@{self.getLotName()}: The targetQuantity={targetQuantity} is too small to open an order as "
-                f"{LIConfigKey.gridLotMinQuantity}={self.gridLotMinQuantity}")
+                f"{LIConfigKey.gridLotMinQuantity}={self.gridLotMinQuantity}", self.verbose)
             return False
-
-        if targetPrice <= 0:  # Important! Avoid initialization failure.
-            return False  # Abort, invalid target price!
 
         if self.gridTrailingOpenPriceFactor and marketPrice != self.gridTrading.lastTradingMarketPrice:
             trailingOpenPrice = self.getTrailingOpenPrice(marketPrice=marketPrice)
@@ -121,10 +109,16 @@ class LIGridTradingLot(LIGridBaseLot):
                 targetPrice = self.trailingOpenPrice = newTargetPrice
 
         openFromPrice = None
-        if self.isContrarianMode():
-            openFromPrice = self.getOpenFromPrice()
+        if self.gridTrading.gridOpenFromPrices:
+            if self.isContrarianMode():
+                openFromPrice = self.getOpenFromPrice()
+            elif self.isMomentumMode() and not self.gridTrading.reachedOpenPrice:
+                log(f"{self.getSymbolAlias()}@{self.getLotName()}: Abort placing open order ticket as marketPrice={self.getMarketPrice()} not reached "
+                    f"gridOpenFromPrices={self.gridTrading.gridOpenFromPrices} yet!", self.verbose)
+                return False
 
-        openPrice = self.getSortedOpenPrice(targetPrice, marketPrice, openFromPrice, useMarketOrder)
+        openPrice = self.getSortedOpenPrice(marketPrice, targetPrice, openFromPrice, useMarketOrder)
+        tradeInsight = self.gridTrading.getTradeInsight()
 
         # Adjust open price according to boost more positions!
         if boostMorePositions:
@@ -133,7 +127,7 @@ class LIGridTradingLot(LIGridBaseLot):
             targetQuantity = min(self.getTargetQuantity(), maxHoldQuantity - investedQuantity)
             if targetQuantity <= 0:
                 log(f"{self.getSymbolAlias()}@{self.getLotName()}: Abort boosting more positions as targetQuantity={targetQuantity}, "
-                    f"investedQuantity={investedQuantity}, maxHoldQuantity={maxHoldQuantity}.")
+                    f"investedQuantity={investedQuantity}, maxHoldQuantity={maxHoldQuantity}, signalType={tradeInsight.signalType}.")
                 return False
             openPrice = marketPrice
             if self.openWithMarketOrderType:
@@ -141,39 +135,42 @@ class LIGridTradingLot(LIGridBaseLot):
             if self.openOrderTicket and not isOrderTicketUpdatable(self.openOrderTicket):
                 self.openOrderTicket = None  # Reset ever filled open order ticket
             log(f"{self.getSymbolAlias()}@{self.getLotName()}: Boosting more positions now as targetQuantity={targetQuantity}, "
-                f"investedQuantity={investedQuantity}, maxHoldQuantity={maxHoldQuantity}, "
+                f"investedQuantity={investedQuantity}, maxHoldQuantity={maxHoldQuantity}, signalType={tradeInsight.signalType}, "
                 f"profitLossFactor={self.getProfitLossFactor()} >= boostingProfitFactor={self.getBoostingProfitFactor()}.")
 
         #  Adjust open price according to trade insight if enabled!
         openPositionsNow = False
-        if self.gridTrading.gridUseTradeInsight:
-            tradeInsight = self.gridTrading.getTradeInsight()
-            if not tradeInsight or tradeInsight.isNoneSignal():
-                return  # Abort as no signal yet!
+        if not tradeInsight.isNoneSignal():
             if tradeInsight.isLongSignal():
                 if self.isShortLot():
                     self.pausedOpening = False  # Enable counterpart lot for future short signal
-                    self.cancelOpenOrderTicket(f"Cancel {LITradeType.OPENING} order as per tradeInsight={tradeInsight}.")
-                    return  # Abort as against the Long signal
-                elif self.isFirstLongLot() and self.hasNoOpenPosition():
+                    self.cancelOpenOrderTicket(f"Cancel {LITradeType.OPENING} order as per tradeInsight: {tradeInsight}.")
+                    return False  # Abort as against the Long signal
+                elif self.gridLotOpenUponTradeInsight and self.isFirstLongLot() and self.hasNoOpenPosition():
                     openPositionsNow = True
             elif tradeInsight.isShortSignal():
                 if self.isLongLot():
                     self.pausedOpening = False  # Enable counterpart lot for future long signal
-                    self.cancelOpenOrderTicket(f"Cancel {LITradeType.OPENING} order as per tradeInsight={tradeInsight}.")
-                    return  # Abort as against the Short signal
-                elif self.isFirstShortLot() and self.hasNoOpenPosition():
+                    self.cancelOpenOrderTicket(f"Cancel {LITradeType.OPENING} order as per tradeInsight: {tradeInsight}.")
+                    return False  # Abort as against the Short signal
+                elif self.gridLotOpenUponTradeInsight and self.isFirstShortLot() and self.hasNoOpenPosition():
                     openPositionsNow = True
             elif tradeInsight.isCloseSignal():
-                self.cancelOpenOrderTicket(f"Cancel {LITradeType.OPENING} order as per tradeInsight={tradeInsight}.")
-                return  # Abort as per the Close signal
+                self.cancelOpenOrderTicket(f"Cancel {LITradeType.OPENING} order as per tradeInsight: {tradeInsight}.")
+                return False  # Abort as per the Close signal
+            elif tradeInsight.isTradeSignal():
+                pass  # Handle it below with tradeOrderSet
+            elif tradeInsight.isRisingSignal():
+                pass  # No action for rising signal for now
+            elif tradeInsight.isFallingSignal():
+                pass  # No action for falling signal for now
             else:
-                raise TypeError(f"Not support tradeInsight={tradeInsight}!")
+                raise TypeError(f"Not support tradeInsight: {tradeInsight}!")
             if openPositionsNow:
                 openPrice = marketPrice
                 if self.openWithMarketOrderType:
                     useMarketOrder = True
-                log(f"{self.getSymbolAlias()}@{self.getLotName()}: Opening positions now as per tradeInsight={tradeInsight}.")
+                log(f"{self.getSymbolAlias()}@{self.getLotName()}: Opening positions now as per tradeInsight: {tradeInsight}.")
 
         # Adjust open price according to counterpart losing lots!
         if self.gridTrading.gridHedgeEnabled:
@@ -206,16 +203,16 @@ class LIGridTradingLot(LIGridBaseLot):
 
         if useMarketOrder:
             if isOrderTicketUpdatable(self.openOrderTicket):
-                if self.openOrderTicket.OrderType in [OrderType.MARKET, OrderType.MARKET_ON_OPEN, OrderType.MARKET_ON_CLOSE]:
+                if self.openOrderTicket.order_type in [OrderType.MARKET, OrderType.MARKET_ON_OPEN, OrderType.MARKET_ON_CLOSE]:
                     log(f"{self.getSymbolAlias()}@{self.getLotName()}: Waiting for open order to be filled: orderId={self.openOrderTicket.order_id}, "
-                        f"status={getEnumName(self.openOrderTicket.status, OrderStatus)}; {self.openOrderTicket.tag}")
+                        f"status={str(self.openOrderTicket.status)}; {self.openOrderTicket.tag}")
                     return True
                 else:
-                    tagLog = f"Cancel {LITradeType.OPENING} {self.openOrderTicket.OrderType} order to use {tradeType} order! tag=[{self.openOrderTicket.Tag}]."
+                    tagLog = f"Cancel {LITradeType.OPENING} {self.openOrderTicket.order_type} order to use {tradeType} order! tag=[{self.openOrderTicket.tag}]."
                     self.positionManager.cancelOrder(self.openOrderTicket, tagLog)
             tagLog = (f"{self.getLotName()}: Submit {tradeType} order at openPrice={openPrice}, targetPrice={targetPrice}, "
-                      f"targetQuantity={targetQuantity}, {self.printGridLotPrices()}, marketPrice={marketPrice}, "
-                      f"closeTargetPrice={self.getCloseTargetPrice()}.")
+                      f"targetQuantity={targetQuantity}, {self.printAncillaryPrices()}, marketPrice={marketPrice}, "
+                      f"closeTargetPrice={self.getCloseTargetPrice()}, signalType={tradeInsight.signalType}.")
             if boostMorePositions:
                 tagLog = tagLog.replace("Submit ", "Boosting ")
                 tagLog += f" profitLossFactor={self.getProfitLossFactor()} >= boostingProfitFactor={self.getBoostingProfitFactor()}."
@@ -232,33 +229,33 @@ class LIGridTradingLot(LIGridBaseLot):
                 return True  # Abort, invalid order!
             if isStopOrderType(self.openOrderTicket) and not stopLimitPrices:
                 terminate(f"Missing stopLimitPrices for the openOrderTicket!")
-            if self.openOrderTicket.OrderType == OrderType.Market or self.openOrderTicket.OrderType == OrderType.MarketOnOpen:
+            if self.openOrderTicket.order_type == OrderType.MARKET or self.openOrderTicket.order_type == OrderType.MARKET_ON_OPEN:
                 return True  # Abort, wait for market open
             openPriceMsg = f"stopLimitPrices={printStopLimitPrices(stopLimitPrices)}" if stopLimitPrices else f"openPrice={openPrice}"
             tagLog = (f"{self.getLotName()}: Update {tradeType} order at {openPriceMsg}, targetPrice={targetPrice}, "
-                      f"targetQuantity={targetQuantity}, {self.printGridLotPrices()}, marketPrice={marketPrice}, "
-                      f"closeTargetPrice={self.getCloseTargetPrice()}.")
+                      f"targetQuantity={targetQuantity}, {self.printAncillaryPrices()}, marketPrice={marketPrice}, "
+                      f"closeTargetPrice={self.getCloseTargetPrice()}, signalType={tradeInsight.signalType}.")
             needToUpdate = False
             updateFields = UpdateOrderFields()
             if self.isMomentumMode():
-                if self.openOrderTicket.OrderType == OrderType.STOP_LIMIT and (self.openOrderTicket.Get(OrderField.StopPrice) != targetPrice or
-                                                                               self.openOrderTicket.Get(OrderField.LimitPrice) != stopLimitPrices[1]):
-                    updateFields.StopPrice = targetPrice  # NOT update to open price as it is syncing with market price!
-                    updateFields.LimitPrice = stopLimitPrices[1]
+                if self.openOrderTicket.order_type == OrderType.STOP_LIMIT and (self.openOrderTicket.get(OrderField.STOP_PRICE) != targetPrice or
+                                                                               self.openOrderTicket.get(OrderField.LIMIT_PRICE) != stopLimitPrices[1]):
+                    updateFields.stop_price = targetPrice  # NOT update to open price as it is syncing with market price!
+                    updateFields.limit_price = stopLimitPrices[1]
                     needToUpdate = True
                 elif (self.isLongLot() and openPrice <= marketPrice) or (self.isShortLot() and openPrice >= marketPrice):
-                    if self.openOrderTicket.OrderType == OrderType.LIMIT and self.openOrderTicket.Get(OrderField.LimitPrice) != openPrice:
-                        updateFields.LimitPrice = openPrice
+                    if self.openOrderTicket.order_type == OrderType.LIMIT and self.openOrderTicket.get(OrderField.LIMIT_PRICE) != openPrice:
+                        updateFields.limit_price = openPrice
                         needToUpdate = True
-            elif self.isContrarianMode():
-                if self.openOrderTicket.Get(OrderField.LimitPrice) != openPrice:
-                    updateFields.LimitPrice = openPrice
+            else:
+                if self.openOrderTicket.get(OrderField.LIMIT_PRICE) != openPrice:
+                    updateFields.limit_price = openPrice
                     needToUpdate = True
             if needToUpdate:
                 log(f"{self.getSymbolAlias()}@{tagLog}", self.verbose)
-                updateFields.Quantity = targetQuantity
-                updateFields.Tag = decorateTag(tagLog)
-                self.openOrderTicket.Update(updateFields)
+                updateFields.quantity = targetQuantity
+                updateFields.tag = decorateTag(tagLog)
+                self.openOrderTicket.update(updateFields)
                 self.lotStatus = LILotStatus.OPENING
                 liveSleep(1)  # A little break
             return needToUpdate
@@ -269,16 +266,15 @@ class LIGridTradingLot(LIGridBaseLot):
                (maintainOpenOrders == 3 and self.canSubmitOpenOrder3()))):
             openPriceMsg = f"stopLimitPrices={printStopLimitPrices(stopLimitPrices)}" if stopLimitPrices else f"openPrice={openPrice}"
             tagLog = (f"{self.getLotName()}: Submit {tradeType} order at {openPriceMsg}, targetPrice={targetPrice}, "
-                      f"targetQuantity={targetQuantity}, {self.printGridLotPrices()}, marketPrice={marketPrice}, "
-                      f"closeTargetPrice={self.getCloseTargetPrice()}.")
+                      f"targetQuantity={targetQuantity}, {self.printAncillaryPrices()}, marketPrice={marketPrice}, "
+                      f"closeTargetPrice={self.getCloseTargetPrice()}, signalType={tradeInsight.signalType}.")
             if boostMorePositions:
                 tagLog = tagLog.replace("Submit ", "Boosting ")
                 tagLog += f" profitLossFactor={self.getProfitLossFactor()} >= boostingProfitFactor={self.getBoostingProfitFactor()}."
             if self.isMomentumMode():
                 if self.openWithStopOrderType:
                     log(f"{self.getSymbolAlias()}@{tagLog}")
-                    self.openOrderTicket = getAlgo().StopLimitOrder(self.getSymbol(), targetQuantity, stopLimitPrices[0], stopLimitPrices[1],
-                                                                    tag=decorateTag(tagLog))
+                    self.openOrderTicket = self.positionManager.stopLimitOrder(targetQuantity, stopLimitPrices[0], stopLimitPrices[1], tagLog)
                     self.lotStatus = LILotStatus.OPENING
                     liveSleep(1)  # A little break to propagate status
                     return True
@@ -289,13 +285,13 @@ class LIGridTradingLot(LIGridBaseLot):
                         self.openOrderTicket = self.positionManager.limitMarketOrder(targetQuantity, tagLog)
                         self.fireOrderEvents(self.openOrderTicket)
                     else:
-                        self.openOrderTicket = getAlgo().LimitOrder(self.getSymbol(), targetQuantity, marketPrice, tag=decorateTag(tagLog))
+                        self.openOrderTicket = self.positionManager.limitOrder(targetQuantity, marketPrice, tagLog)
                     self.lotStatus = LILotStatus.OPENING
                     liveSleep(1)  # A little break to propagate status
                     return True
-            elif self.isContrarianMode():
+            else:
                 log(f"{self.getSymbolAlias()}@{tagLog}")
-                self.openOrderTicket = getAlgo().LimitOrder(self.getSymbol(), targetQuantity, openPrice, tag=decorateTag(tagLog))
+                self.openOrderTicket = self.positionManager.limitOrder(targetQuantity, openPrice, tagLog)
                 self.lotStatus = LILotStatus.OPENING
                 liveSleep(1)  # A little break to propagate status
                 return True
@@ -304,11 +300,7 @@ class LIGridTradingLot(LIGridBaseLot):
             self.fireOrderEvents(self.openOrderTicket)
             liveSleep(1)  # A little break to propagate status
             return True
-
-        # Verify open order ticket status, skip it as an invalid order is still updatable and can be fixed later!
-        # if self.openOrderTicket and self.openOrderTicket.Status == OrderStatus.Invalid:
-        #     self.openOrderTicket = None  # Abort as invalid, catch error within onOrderEvent()
-        #     return False
+        return False
 
     def manageLotCloseOrderTicket(self, useMarketOrder=False):
         if self.gridTrading.gridNoMoreCloseOrders:
@@ -321,7 +313,7 @@ class LIGridTradingLot(LIGridBaseLot):
         if not self.gridLotTakeProfitFactor:
             return False  # Abort, not specified profit factor!
 
-        closePrice = 0
+        closePrice = 0.0
         marketPrice = self.getMarketPrice()
         targetPrice = self.getCloseTargetPrice()
         targetQuantity = -self.filledOpenQuantity
@@ -355,10 +347,8 @@ class LIGridTradingLot(LIGridBaseLot):
 
         # Adjust close price according to trade insight if enabled!
         closePositionsNow = False
-        if self.gridTrading.gridUseTradeInsight:
-            tradeInsight = self.gridTrading.getTradeInsight()
-            if not tradeInsight or tradeInsight.isNoneSignal():
-                return  # Abort as no signal yet!
+        tradeInsight = self.gridTrading.getTradeInsight()
+        if not tradeInsight.isNoneSignal() and self.gridLotCloseUponTradeInsight:
             if tradeInsight.isLongSignal():
                 if self.isShortLot():
                     closePositionsNow = True
@@ -368,12 +358,12 @@ class LIGridTradingLot(LIGridBaseLot):
             elif tradeInsight.isCloseSignal():
                 closePositionsNow = True
             else:
-                raise TypeError(f"Not support tradeInsight={tradeInsight}!")
+                raise TypeError(f"Not support tradeInsight: {tradeInsight}!")
             if closePositionsNow:
                 closePrice = marketPrice
                 if self.closeWithMarketOrderType:
                     useMarketOrder = True
-                log(f"{self.getSymbolAlias()}@{self.getLotName()}: Closing positions now as per tradeInsight={tradeInsight}.", self.verbose)
+                log(f"{self.getSymbolAlias()}@{self.getLotName()}: Closing positions now as per tradeInsight: {tradeInsight}.", self.verbose)
 
         tradeType = LITradeType.CLOSING_LIMIT
         if useMarketOrder or self.closeWithMarketOrderType:
@@ -391,7 +381,8 @@ class LIGridTradingLot(LIGridBaseLot):
             elif maxProfitPrice and marketPrice >= maxProfitPrice[0] >= targetPrice:
                 stopLimitPrices = (marketPrice, maxProfitPrice[0], maxProfitPrice[1])
                 tradeType = LITradeType.CLOSING_MAX_PROFIT
-            elif stopProfitPrice and (marketPrice > stopProfitPrice[0] > targetPrice or self.trailingStopProfitPrice):
+            elif stopProfitPrice and (
+                    marketPrice > stopProfitPrice[0] > targetPrice or (self.trailingStopProfitPrice and self.trailingStopProfitPrice > targetPrice)):
                 self.trailingStopProfitPrice = max(stopProfitPrice[0], self.trailingStopProfitPrice if self.trailingStopProfitPrice else sys.float_info.min)
                 stopLimitPrices = (self.trailingStopProfitPrice, self.trailingStopProfitPrice, stopProfitPrice[1])
                 tradeType = LITradeType.CLOSING_STOP_PROFIT
@@ -414,7 +405,8 @@ class LIGridTradingLot(LIGridBaseLot):
             elif maxProfitPrice and marketPrice <= maxProfitPrice[0] <= targetPrice:
                 stopLimitPrices = (marketPrice, maxProfitPrice[0], maxProfitPrice[1])
                 tradeType = LITradeType.CLOSING_MAX_PROFIT
-            elif stopProfitPrice and (marketPrice < stopProfitPrice[0] < targetPrice or self.trailingStopProfitPrice):
+            elif stopProfitPrice and (
+                    marketPrice < stopProfitPrice[0] < targetPrice or (self.trailingStopProfitPrice and self.trailingStopProfitPrice < targetPrice)):
                 self.trailingStopProfitPrice = min(stopProfitPrice[0], self.trailingStopProfitPrice if self.trailingStopProfitPrice else sys.float_info.max)
                 stopLimitPrices = (self.trailingStopProfitPrice, self.trailingStopProfitPrice, stopProfitPrice[1])
                 tradeType = LITradeType.CLOSING_STOP_PROFIT
@@ -446,18 +438,18 @@ class LIGridTradingLot(LIGridBaseLot):
                                               True, stopPriceFactor)
 
         if useMarketOrder:
-            if self.closeOrderTicket and self.closeOrderTicket.OrderType in [OrderType.MARKET, OrderType.MARKET_ON_OPEN, OrderType.MARKET_ON_CLOSE]:
+            if self.closeOrderTicket and self.closeOrderTicket.order_type in [OrderType.MARKET, OrderType.MARKET_ON_OPEN, OrderType.MARKET_ON_CLOSE]:
                 log(f"{self.getSymbolAlias()}@{self.getLotName()}: Waiting for close order to be filled: orderId={self.closeOrderTicket.order_id}, "
-                    f"status={getEnumName(self.closeOrderTicket.status, OrderStatus)}; {self.closeOrderTicket.tag}")
+                    f"status={str(self.closeOrderTicket.status)}; {self.closeOrderTicket.tag}")
                 self.lotStatus = LILotStatus.CLOSING
                 return True
             elif isOrderTicketUpdatable(self.closeOrderTicket):
-                tagLog = f"Cancel {LITradeType.CLOSING} {self.closeOrderTicket.OrderType} order to use {tradeType} order! tag=[{self.closeOrderTicket.Tag}]."
+                tagLog = f"Cancel {LITradeType.CLOSING} {self.closeOrderTicket.order_type} order to use {tradeType} order! tag=[{self.closeOrderTicket.tag}]."
                 self.positionManager.cancelOrder(self.closeOrderTicket, tagLog)
             closePriceMsg = f"stopLimitPrices={printStopLimitPrices(stopLimitPrices)}" if stopLimitPrices else f"closePrice={closePrice}"
             tagLog = f"{self.getLotName()}: Submit {tradeType} order at {closePriceMsg}, targetPrice={targetPrice}, " \
-                     f"targetQuantity={targetQuantity}, {self.printGridLotPrices()}, marketPrice={marketPrice}, " \
-                     f"{self.printOpenPrices()}."
+                     f"targetQuantity={targetQuantity}, {self.printAncillaryPrices()}, marketPrice={marketPrice}, " \
+                     f"{self.printOpenPrices()}, signalType={tradeInsight.signalType}."
             log(f"{self.getSymbolAlias()}@{tagLog}")
             self.closeOrderTicket = self.positionManager.limitMarketOrder(targetQuantity, tagLog)
             self.lotStatus = LILotStatus.CLOSING
@@ -465,82 +457,77 @@ class LIGridTradingLot(LIGridBaseLot):
             liveSleep(5)  # A little break
             return True
         elif isOrderTicketUpdatable(self.closeOrderTicket):
-            if self.closeOrderTicket.OrderType in [OrderType.MARKET, OrderType.MARKET_ON_OPEN, OrderType.MARKET_ON_CLOSE]:
+            if self.closeOrderTicket.order_type in [OrderType.MARKET, OrderType.MARKET_ON_OPEN, OrderType.MARKET_ON_CLOSE]:
                 return False  # Abort, waiting for market open or order to be filled
             if isStopOrderType(self.closeOrderTicket) and not stopLimitPrices:
                 if self.gridLotStopLossFactor and not closePositionsNow:
                     terminate(f"Missing stopLimitPrices for the closeOrderTicket!")
                 else:
-                    tagLog = f"Cancel {self.closeOrderTicket.OrderType} order to start over! tag=[{self.closeOrderTicket.Tag}]."
+                    tagLog = f"Cancel {self.closeOrderTicket.order_type} order to start over! tag=[{self.closeOrderTicket.tag}]."
                     self.positionManager.cancelOrder(self.closeOrderTicket, tagLog)
                     return False
             closePriceMsg = self.getClosePriceMsg(closePrice, stopLimitPrices, trailingStopPrices)
             tagLog = f"{self.getLotName()}: Update {tradeType} order at {closePriceMsg}, targetPrice={targetPrice}, " \
-                     f"targetQuantity={targetQuantity}, {self.printGridLotPrices()}, marketPrice={marketPrice}, " \
-                     f"{self.printOpenPrices()}."
+                     f"targetQuantity={targetQuantity}, {self.printAncillaryPrices()}, marketPrice={marketPrice}, " \
+                     f"{self.printOpenPrices()}, signalType={tradeInsight.signalType}."
             needToUpdate = False
             updateFields = UpdateOrderFields()
-            if self.closeOrderTicket.Quantity != targetQuantity:
-                updateFields.Quantity = targetQuantity
+            if self.closeOrderTicket.quantity != targetQuantity:
+                updateFields.quantity = targetQuantity
                 needToUpdate = True
             if stopLimitPrices:
-                if self.closeOrderTicket.OrderType == OrderType.Limit:
-                    if self.closeOrderTicket.Get(OrderField.LimitPrice) != stopLimitPrices[1]:
-                        updateFields.LimitPrice = stopLimitPrices[1]
+                if self.closeOrderTicket.order_type == OrderType.LIMIT:
+                    if self.closeOrderTicket.get(OrderField.LIMIT_PRICE) != stopLimitPrices[1]:
+                        updateFields.limit_price = stopLimitPrices[1]
                         needToUpdate = True
-                elif self.closeOrderTicket.OrderType == OrderType.StopLimit:
-                    if (self.closeOrderTicket.Get(OrderField.StopPrice) != stopLimitPrices[0] or
-                            self.closeOrderTicket.Get(OrderField.LimitPrice) != stopLimitPrices[1]):
-                        updateFields.StopPrice = stopLimitPrices[0]
-                        updateFields.LimitPrice = stopLimitPrices[1]
+                elif self.closeOrderTicket.order_type == OrderType.STOP_LIMIT:
+                    if (self.closeOrderTicket.get(OrderField.STOP_PRICE) != stopLimitPrices[0] or
+                            self.closeOrderTicket.get(OrderField.LIMIT_PRICE) != stopLimitPrices[1]):
+                        updateFields.stop_price = stopLimitPrices[0]
+                        updateFields.limit_price = stopLimitPrices[1]
                         needToUpdate = True
-                elif self.closeOrderTicket.OrderType == OrderType.StopMarket:
-                    if self.closeOrderTicket.Get(OrderField.StopPrice) != stopLimitPrices[0]:
-                        updateFields.StopPrice = stopLimitPrices[0]
+                elif self.closeOrderTicket.order_type == OrderType.STOP_MARKET:
+                    if self.closeOrderTicket.get(OrderField.STOP_PRICE) != stopLimitPrices[0]:
+                        updateFields.stop_price = stopLimitPrices[0]
                         needToUpdate = True
-                elif self.closeOrderTicket.OrderType == OrderType.TrailingStop:
-                    if self.updateTrailingStopPrice and self.closeOrderTicket.Get(OrderField.StopPrice) != trailingStopPrices[0]:
-                        updateFields.StopPrice = trailingStopPrices[0]
+                elif self.closeOrderTicket.order_type == OrderType.TRAILING_STOP:
+                    if self.updateTrailingStopPrice and self.closeOrderTicket.get(OrderField.STOP_PRICE) != trailingStopPrices[0]:
+                        updateFields.stop_price = trailingStopPrices[0]
                         needToUpdate = True
-                    if self.closeOrderTicket.Get(OrderField.TrailingAmount) != trailingStopPrices[1]:
-                        updateFields.TrailingAmount = trailingStopPrices[1]
+                    if self.closeOrderTicket.get(OrderField.TRAILING_AMOUNT) != trailingStopPrices[1]:
+                        updateFields.trailing_amount = trailingStopPrices[1]
                         needToUpdate = True
             elif closePrice:
-                if self.closeOrderTicket.Get(OrderField.LimitPrice) != closePrice:
-                    updateFields.LimitPrice = closePrice
+                if self.closeOrderTicket.get(OrderField.LIMIT_PRICE) != closePrice:
+                    updateFields.limit_price = closePrice
                     needToUpdate = True
             if needToUpdate:
                 log(f"{self.getSymbolAlias()}@{tagLog}", self.verbose)
-                updateFields.Tag = decorateTag(tagLog)
-                orderResponse = self.closeOrderTicket.Update(updateFields)
-                if orderResponse and orderResponse.IsError:
-                    notify(f"{self.getNotifyPrefix()}: Failed to update close order ticket fields: {orderResponse}, tag=[{self.closeOrderTicket.Tag}].")
+                updateFields.tag = decorateTag(tagLog)
+                orderResponse = self.closeOrderTicket.update(updateFields)
+                if orderResponse and orderResponse.is_error:
+                    notify(f"{self.getNotifyPrefix()}: Failed to update close order ticket fields: {orderResponse}, tag=[{self.closeOrderTicket.tag}].")
                 self.lotStatus = LILotStatus.CLOSING
             return needToUpdate
         elif targetQuantity != 0 and self.canSubmitCloseOrder(tradeType):
             closePriceMsg = self.getClosePriceMsg(closePrice, stopLimitPrices, trailingStopPrices)
             tagLog = f"{self.getLotName()}: Submit {tradeType} order at {closePriceMsg}, targetPrice={targetPrice}, " \
-                     f"targetQuantity={targetQuantity}, {self.printGridLotPrices()}, marketPrice={marketPrice}, " \
-                     f"{self.printOpenPrices()}."
+                     f"targetQuantity={targetQuantity}, {self.printAncillaryPrices()}, marketPrice={marketPrice}, " \
+                     f"{self.printOpenPrices()}, signalType={tradeInsight.signalType}."
             if stopLimitPrices:
                 if self.closeWithStopOrderType:
                     log(f"{self.getSymbolAlias()}@{tagLog}")
                     if self.submitTrailingStopOrder:
                         if self.updateTrailingStopPrice:
-                            self.closeOrderTicket = getAlgo().TrailingStopOrder(self.getSymbol(), quantity=targetQuantity, stopPrice=trailingStopPrices[0],
-                                                                                trailingAmount=trailingStopPrices[1],
-                                                                                trailingAsPercentage=trailingStopPrices[2], tag=decorateTag(tagLog))
+                            self.closeOrderTicket = self.positionManager.trailingStopOrder(targetQuantity, trailingStopPrices[0], trailingStopPrices[1],
+                                                                                           trailingStopPrices[2], tagLog)
                         else:
-                            self.closeOrderTicket = getAlgo().TrailingStopOrder(self.getSymbol(), quantity=targetQuantity,
-                                                                                trailingAmount=trailingStopPrices[1],
-                                                                                trailingAsPercentage=trailingStopPrices[2], tag=decorateTag(tagLog))
+                            self.closeOrderTicket = self.positionManager.trailingStopOrder(targetQuantity, None, trailingStopPrices[1], trailingStopPrices[2],
+                                                                                           tagLog)
                     elif self.submitStopMarketOrder:
-                        self.closeOrderTicket = getAlgo().StopMarketOrder(self.getSymbol(), quantity=targetQuantity, stopPrice=stopLimitPrices[0],
-                                                                          tag=decorateTag(tagLog))
+                        self.closeOrderTicket = self.positionManager.stopMarketOrder(targetQuantity, stopLimitPrices[0], tagLog)
                     else:
-                        self.closeOrderTicket = getAlgo().StopLimitOrder(self.getSymbol(), quantity=targetQuantity, stopPrice=stopLimitPrices[0],
-                                                                         limitPrice=stopLimitPrices[1],
-                                                                         tag=decorateTag(tagLog))
+                        self.closeOrderTicket = self.positionManager.stopLimitOrder(targetQuantity, stopLimitPrices[0], stopLimitPrices[1], tagLog)
                     self.lotStatus = LILotStatus.CLOSING
                     return True
                 elif maxProfitPrice and (
@@ -552,7 +539,7 @@ class LIGridTradingLot(LIGridBaseLot):
                         self.closeOrderTicket = self.positionManager.limitMarketOrder(targetQuantity, tagLog)
                         self.fireOrderEvents(self.closeOrderTicket)
                     else:
-                        self.closeOrderTicket = getAlgo().LimitOrder(self.getSymbol(), targetQuantity, marketPrice, tag=decorateTag(tagLog))
+                        self.closeOrderTicket = self.positionManager.limitOrder(targetQuantity, marketPrice, tagLog)
                     self.lotStatus = LILotStatus.CLOSING
                     return True
                 elif (self.isLongLot() and stopLimitPrices[0] > marketPrice) or (self.isShortLot() and stopLimitPrices[0] < marketPrice):
@@ -563,7 +550,7 @@ class LIGridTradingLot(LIGridBaseLot):
                         self.closeOrderTicket = self.positionManager.limitMarketOrder(targetQuantity, tagLog)
                         self.fireOrderEvents(self.closeOrderTicket)
                     else:
-                        self.closeOrderTicket = getAlgo().LimitOrder(self.getSymbol(), targetQuantity, marketPrice, tag=decorateTag(tagLog))
+                        self.closeOrderTicket = self.positionManager.limitOrder(targetQuantity, marketPrice, tagLog)
                     self.lotStatus = LILotStatus.CLOSING
                     return True
                 else:
@@ -574,7 +561,7 @@ class LIGridTradingLot(LIGridBaseLot):
                 return False
             else:
                 log(f"{self.getSymbolAlias()}@{tagLog}")
-                self.closeOrderTicket = getAlgo().LimitOrder(self.getSymbol(), targetQuantity, closePrice, tag=decorateTag(tagLog))
+                self.closeOrderTicket = self.positionManager.limitOrder(targetQuantity, closePrice, tagLog)
                 self.lotStatus = LILotStatus.CLOSING
                 return True
         elif targetQuantity != 0:
@@ -587,11 +574,7 @@ class LIGridTradingLot(LIGridBaseLot):
                 alert(f"{self.getNotifyPrefix()}@{self.getLotName()}: The closingPrice={closingPrice} should be greater than openPrice={self.filledOpenPrice}.")
             if self.isShortLot() and closingPrice > self.filledOpenPrice:
                 alert(f"{self.getNotifyPrefix()}@{self.getLotName()}: The closingPrice={closingPrice} should be less than openPrice={self.filledOpenPrice}")
-
-        # Verify close order ticket status, skip it as an invalid order is still updatable!
-        # if self.closeOrderTicket and self.closeOrderTicket.Status == OrderStatus.Invalid:
-        #     self.closeOrderTicket = None  # Abort as invalid, catch error within onOrderEvent()
-        #     return False
+        return False
 
     def getClosePriceMsg(self, closePrice, stopLimitPrices, trailingStopPrices):
         if trailingStopPrices:
@@ -611,9 +594,9 @@ class LIGridTradingLot(LIGridBaseLot):
         self.openOrderTransferId = None
         self.createdOpenOrderTime = None
 
-        self.stopOrderPrice = 0
-        self.trailingAmount = 0
-        self.closeOrderPrice = 0
+        self.stopOrderPrice = 0.0
+        self.trailingAmount = 0.0
+        self.closeOrderPrice = 0.0
         self.closeOrderQuantity = 0
         self.closeOrderTicket = None
         self.closeOrderTransferId = None
@@ -635,18 +618,18 @@ class LIGridTradingLot(LIGridBaseLot):
             if not self.actualOpenPrice:
                 self.actualOpenPrice = self.filledOpenPrice
         else:
-            self.actualOpenPrice = 0
-        self.filledOpenPrice = 0
+            self.actualOpenPrice = 0.0
+        self.filledOpenPrice = 0.0
         self.filledOpenQuantity = 0
-        self.trailingOpenPrice = 0
+        self.trailingOpenPrice = 0.0
 
     def fireOrderEvents(self, orderTicket: OrderTicket):
         # NOTE: this fire order events could cause "maximum recursion depth exceeded" for option trading
         # Only need to fire order evens for market order in backtest mode!!!
-        # if orderTicket.OrderType == OrderType.Market:
-        for orderEvent in orderTicket.OrderEvents:
+        # if orderTicket.order_type == OrderType.MARKET:
+        for orderEvent in orderTicket.order_events:
             self.onOrderEvent(orderEvent)
-            orderEvent.OrderId *= -1  # Avoid repeating order event
+            orderEvent.order_id *= -1  # Avoid repeating order event
 
     def markClosingLotStatus(self, stopLimitPrices, closePrice, closeQuantity):
         if stopLimitPrices:
@@ -664,6 +647,7 @@ class LIGridTradingLot(LIGridBaseLot):
             log(f"{self.getSymbolAlias()}@{tagLog}")
             return True
         self.openOrderTicket = None
+        return False
 
     def cancelCloseOrderTicket(self, tagLog=None):
         if isOrderTicketUpdatable(self.closeOrderTicket):
@@ -672,6 +656,7 @@ class LIGridTradingLot(LIGridBaseLot):
             log(f"{self.getSymbolAlias()}@{tagLog}")
             return True
         self.closeOrderTicket = None
+        return False
 
     def isLastOpeningLot(self):
         return ((self.isLongLot() and (self.prevLot.isStartLot() or self.prevLot.pausedOpening or self.prevLot.hasOpenPosition())) or
@@ -764,40 +749,41 @@ class LIGridTradingLot(LIGridBaseLot):
 
     def onOrderEvent(self, orderEvent: OrderEvent):
         delayMaxMsgs = 0 if self.isMomentumMode() else 0
-        if (self.openOrderTicket and self.openOrderTicket.OrderId == orderEvent.OrderId) or (
-                self.openOrderTransferId and self.openOrderTransferId == orderEvent.OrderId):
-            if orderEvent.Status == OrderStatus.Submitted:
+        if (self.openOrderTicket and self.openOrderTicket.order_id == orderEvent.order_id) or (
+                self.openOrderTransferId and self.openOrderTransferId == orderEvent.order_id):
+            if orderEvent.status == OrderStatus.NEW or orderEvent.status == OrderStatus.SUBMITTED:
                 self.lotStatus = LILotStatus.OPENING
                 return True
-            elif orderEvent.Status == OrderStatus.Canceled or orderEvent.Status == OrderStatus.Invalid:
+            elif orderEvent.status == OrderStatus.CANCELED or orderEvent.status == OrderStatus.CANCEL_PENDING or orderEvent.status == OrderStatus.INVALID:
                 self.lotStatus = LILotStatus.HOLDING if self.hasOpenPosition() else LILotStatus.IDLING
                 self.openOrderTicket = None
                 return True
-            elif orderEvent.Status == OrderStatus.PartiallyFilled:
+            elif orderEvent.status == OrderStatus.PARTIALLY_FILLED:
                 self.lotStatus = LILotStatus.HOLDING
-                self.accruedFees += orderEvent.OrderFee.Value.Amount
+                self.accruedFees += orderEvent.order_fee.value.amount
                 return True
-            elif orderEvent.Status == OrderStatus.Filled:
+            elif orderEvent.status == OrderStatus.FILLED:
                 self.lotStatus = LILotStatus.HOLDING
                 '''Can get info from either order event or order ticket'''
-                ticketTag = self.openOrderTicket.Tag if self.openOrderTicket else LITradeType.TRANSFER
-                filledPrice = self.openOrderTicket.AverageFillPrice if self.openOrderTicket else orderEvent.FillPrice
-                filledQuantity = self.openOrderTicket.QuantityFilled if self.openOrderTicket else orderEvent.FillQuantity
+                # ticketTag = self.openOrderTicket.tag if self.openOrderTicket else LITradeType.TRANSFER
+                filledPrice = self.openOrderTicket.average_fill_price if self.openOrderTicket else orderEvent.fill_price
+                filledPrice = self.positionManager.roundSecurityPrice(filledPrice)
+                filledQuantity = self.openOrderTicket.quantity_filled if self.openOrderTicket else orderEvent.fill_quantity
                 self.filledOpenPrice = ((filledPrice * filledQuantity + self.filledOpenPrice * self.filledOpenQuantity) /
                                         (filledQuantity + self.filledOpenQuantity))
                 self.filledOpenPrice = self.positionManager.roundSecurityPrice(self.filledOpenPrice)
                 self.filledOpenQuantity += filledQuantity
-                self.actualOpenPrice = 0  # Clear it!
-                self.accruedFees += orderEvent.OrderFee.Value.Amount
-                self.createdOpenOrderTime = self.openOrderTicket.Time if self.openOrderTicket else orderEvent.UtcTime
-                orderEvent.FillPrice = filledPrice  # Overwrite with average filled price
-                orderEvent.FillQuantity = filledQuantity  # Overwrite with actual filled quantity
-                orderEvent.Quantity = filledQuantity  # Overwrite with actual fill quantity
-                orderEvent.OrderFee.Value = CashAmount(self.accruedFees, orderEvent.OrderFee.Value.Currency)  # Overwrite with all open orders' fees
+                self.actualOpenPrice = 0.0  # Clear it!
+                self.accruedFees += orderEvent.order_fee.value.amount
+                self.createdOpenOrderTime = self.openOrderTicket.time if self.openOrderTicket else orderEvent.utc_time
+                orderEvent.fill_price = filledPrice  # Overwrite with average filled price
+                orderEvent.fill_quantity = filledQuantity  # Overwrite with actual filled quantity
+                orderEvent.quantity = filledQuantity  # Overwrite with actual fill quantity
+                orderEvent.order_fee.value = CashAmount(self.accruedFees, orderEvent.order_fee.value.currency)  # Overwrite with all open orders' fees
                 if self.isBuyAndHoldMode():
-                    self.gridTrading.dcaLastInvestedDate = getAlgo().Time
+                    self.gridTrading.dcaLastInvestedDate = getAlgo().time
                 # log(f"{self.getSymbolAlias()}: Notify open order {self.openOrderTicket} filled event: {orderEvent}.")
-                additionalMsgs = f"totalProfitLoss={self.gridTrading.getMaxProfitLossAmount()}({self.gridTrading.getMaxProfitLossPercent()}%)"
+                additionalMsgs = f"maxProfitLoss={self.gridTrading.getMaxProfitLossAmount()}({self.gridTrading.getMaxProfitLossPercent()}%)"
                 if self.isBoostingLot():
                     # self.trailingStopLossPrice = None # Refresh as the average filled open price been changed
                     # self.trailingStopProfitPrice = None # Refresh as the average filled open price been changed
@@ -808,10 +794,10 @@ class LIGridTradingLot(LIGridBaseLot):
                         investedQuantity = self.gridTrading.getInvestedQuantity()
                         counterpartLot = self.gridTrading.getFirstOpenedCounterpartLot(self)
                         if counterpartLot and counterpartLot.filledOpenQuantity == filledQuantity:
-                            orderEvent.OrderId = orderEvent.OrderId * 100  # Set a new unique order id
-                            orderEvent.OrderFee.Value = CashAmount(0.0, orderEvent.OrderFee.Value.Currency)  # Already count in
-                            orderEvent.Message = orderEvent.Message if orderEvent.Message else f"Transfer from {self.getLotName()}."
-                            counterpartLot.closeOrderTransferId = orderEvent.OrderId
+                            orderEvent.order_id = orderEvent.order_id * 100  # Set a new unique order id
+                            orderEvent.order_fee.value = CashAmount(0.0, orderEvent.order_fee.value.currency)  # Already count in
+                            orderEvent.message = orderEvent.message if orderEvent.message else f"Transfer from {self.getLotName()}."
+                            counterpartLot.closeOrderTransferId = orderEvent.order_id
                             log(f"{self.getSymbolAlias()}@{self.getLotName()}: Transfer to reset the counterpart {counterpartLot.getLotName()} "
                                 f"as counterpartLotFilledOpenQuantity={counterpartLot.filledOpenQuantity}, filledOpenQuantity={self.filledOpenQuantity}, "
                                 f"investedQuantity={investedQuantity}, filledLots={self.gridTrading.countFilledLots()}.")
@@ -825,71 +811,73 @@ class LIGridTradingLot(LIGridBaseLot):
                                 f"investedQuantity={investedQuantity}, filledLots={self.gridTrading.countFilledLots()}.")
                             counterpartLot.manageLotCloseOrderTicket(useMarketOrder=True)
                             counterpartLot = self.gridTrading.getFirstOpenedCounterpartLot(self)
-                if self.gridTrading.gridUseTradeInsight:
+                if self.gridLotOpenUponTradeInsight:
                     if self.isFirstLongLot():
                         self.gridTrading.manageGridStartPrices(retainOpenedLots=1, filledMarketPrice=self.filledOpenPrice, overwriteStartPrices=True)
                     if self.isFirstShortLot():
                         self.gridTrading.manageGridStartPrices(retainOpenedLots=-1, filledMarketPrice=self.filledOpenPrice, overwriteStartPrices=True)
                 self.gridTrading.manageGridTrading(forceTrade=True)  # Trigger all related actions
                 return True
-        elif (self.closeOrderTicket and self.closeOrderTicket.OrderId == orderEvent.OrderId) or (
-                self.closeOrderTransferId and self.closeOrderTransferId == orderEvent.OrderId):
-            if orderEvent.Status == OrderStatus.Submitted:
+        elif (self.closeOrderTicket and self.closeOrderTicket.order_id == orderEvent.order_id) or (
+                self.closeOrderTransferId and self.closeOrderTransferId == orderEvent.order_id):
+            if orderEvent.status == OrderStatus.NEW or orderEvent.status == OrderStatus.SUBMITTED:
                 self.lotStatus = LILotStatus.CLOSING
                 return True
-            elif orderEvent.Status == OrderStatus.Canceled or orderEvent.Status == OrderStatus.Invalid:
+            elif orderEvent.status == OrderStatus.CANCELED or orderEvent.status == OrderStatus.CANCEL_PENDING or orderEvent.status == OrderStatus.INVALID:
                 self.lotStatus = LILotStatus.HOLDING if self.hasOpenPosition() else LILotStatus.IDLING
                 self.closeOrderTicket = None
                 return True
-            elif orderEvent.Status == OrderStatus.PartiallyFilled:
+            elif orderEvent.status == OrderStatus.PARTIALLY_FILLED:
                 self.lotStatus = LILotStatus.CLOSING
-                self.accruedFees += orderEvent.OrderFee.Value.Amount
+                self.accruedFees += orderEvent.order_fee.value.amount
                 return True
-            elif orderEvent.Status == OrderStatus.Filled:
+            elif orderEvent.status == OrderStatus.FILLED:
                 self.lotStatus = LILotStatus.IDLING
-                if self.closeOrderTransferId and self.closeOrderTransferId == orderEvent.OrderId:
+                if self.closeOrderTransferId and self.closeOrderTransferId == orderEvent.order_id:
                     self.cancelCloseOrderTicket(tagLog=f"Cancel close order upon {LITradeType.TRANSFER} a lot.")
-                ticketTag = self.closeOrderTicket.Tag if self.closeOrderTicket else LITradeType.TRANSFER
-                filledPrice = self.closeOrderTicket.AverageFillPrice if self.closeOrderTicket else orderEvent.FillPrice
-                filledQuantity = self.closeOrderTicket.QuantityFilled if self.closeOrderTicket else orderEvent.FillQuantity
+                ticketTag = self.closeOrderTicket.tag if self.closeOrderTicket else LITradeType.TRANSFER
+                filledPrice = self.closeOrderTicket.average_fill_price if self.closeOrderTicket else orderEvent.fill_price
+                filledPrice = self.positionManager.roundSecurityPrice(filledPrice)
+                filledQuantity = self.closeOrderTicket.quantity_filled if self.closeOrderTicket else orderEvent.fill_quantity
                 profitLossPoints = self.getProfitLossPoints(filledPrice) if filledPrice else 0
                 profitLoss = round(profitLossPoints * abs(filledQuantity) * self.getSecurityMultiplier(), LIGlobal.moneyPrecision)
-                self.accruedFees += orderEvent.OrderFee.Value.Amount
+                self.accruedFees += orderEvent.order_fee.value.amount
                 # Add up the lost points and reset it when profit points can cover the lost points at last!
                 self.accruedLostPoints = 0 if profitLossPoints >= self.accruedLostPoints else self.accruedLostPoints + abs(min(profitLossPoints, 0))
                 quantity = abs(filledQuantity)
                 capital = round(quantity * getMaintenanceMargin(self.getSymbol(), filledPrice), LIGlobal.moneyPrecision)
                 duration = 0
                 if self.createdOpenOrderTime:
-                    closedOrderTime = self.closeOrderTicket.Time if self.closeOrderTicket else orderEvent.UtcTime
+                    closedOrderTime = self.closeOrderTicket.time if self.closeOrderTicket else orderEvent.utc_time
                     duration = (closedOrderTime - self.createdOpenOrderTime).total_seconds()
                 netProfit = round(profitLoss - self.accruedFees, 2)  # Use local calculated value
-                orderEvent.FillPrice = filledPrice  # Overwrite with average fill price
-                orderEvent.FillQuantity = filledQuantity  # Overwrite with actual fill quantity
-                orderEvent.Quantity = filledQuantity  # Overwrite with actual fill quantity
-                orderEvent.OrderFee.Value = CashAmount(self.accruedFees / 2, orderEvent.OrderFee.Value.Currency)  # Overwrite with all close orders' fees
+                orderEvent.fill_price = filledPrice  # Overwrite with average fill price
+                orderEvent.fill_quantity = filledQuantity  # Overwrite with actual fill quantity
+                orderEvent.quantity = filledQuantity  # Overwrite with actual fill quantity
+                orderEvent.order_fee.value = CashAmount(self.accruedFees / 2, orderEvent.order_fee.value.currency)  # Overwrite with all close orders' fees
                 self.addRealizedProfitLoss(netProfit)
                 additionalMsgs = (f"openPrice={self.getFinalOpenPrice()}, filledPrice={filledPrice}, "
-                                  f"totalProfitLoss={self.gridTrading.getMaxProfitLossAmount()}({self.gridTrading.getMaxProfitLossPercent()}%)")
+                                  f"maxProfitLoss={self.gridTrading.getMaxProfitLossAmount()}({self.gridTrading.getMaxProfitLossPercent()}%)")
                 self.positionManager.notifyOrderFilled(orderEvent, netProfit=netProfit, additionalMsgs=additionalMsgs, delayMaxMsgs=delayMaxMsgs)
                 addDailyClosedTrade(self.canonicalSymbol.value, [profitLoss, self.accruedFees, capital, quantity, duration])
                 if self.gridLotPauseAfterProfit and profitLossPoints > 0:
                     self.pausedOpening = True
                     notify(f"{self.getNotifyPrefix()}@{self.getLotName()}: Paused this lot's trading after took profit: {self.printOpenPrices()}, "
-                           f"closePrice={filledPrice}, profitLossPoints={profitLossPoints}, netProfit={netProfit}, accruedLostPoints={self.accruedLostPoints}.")
+                           f"closePrice={filledPrice}, profitLossPoints={profitLossPoints}, netProfitLoss={netProfit}, accruedLostPoints={self.accruedLostPoints}.")
                 elif (self.gridLotPauseAfterStopLoss and profitLossPoints < 0 and
                       (LITradeType.CLOSING_STOP_LOSS in ticketTag or LITradeType.CLOSING_TRAILING_STOP_LOSS in ticketTag)):
                     self.pausedOpening = True
                     notify(f"{self.getNotifyPrefix()}@{self.getLotName()}: Paused this lot's trading after stopped loss: {self.printOpenPrices()}, "
-                           f"closePrice={filledPrice}, profitLossPoints={profitLossPoints}, netProfit={netProfit}, accruedLostPoints={self.accruedLostPoints}.")
+                           f"closePrice={filledPrice}, profitLossPoints={profitLossPoints}, netProfitLoss={netProfit}, accruedLostPoints={self.accruedLostPoints}.")
                 if self.isPausedOpening() and self.verbose:
                     self.gridTrading.printGridSession()
                 self.resetTradingLot(reason=f"Filled close order: {ticketTag}.")
                 # self.gridTrading.resetGridStartPrices(emptyStartPrices=True)  # less drawdown, but less profit!
                 if self.gridCancelOrdersAfterClosed:
-                    self.gridTrading.cancelOpenOrders(peerLot=self, tagLog=f"Closed {self.getLotName()}, need to resubmit open orders.")
+                    self.gridTrading.cancelOpenOrders(peerLot=self, tagLog=f"Closed {self.getLotName()}, need to cancel this one and resubmit open orders.")
                 self.gridTrading.manageGridTrading(forceTrade=True)  # Trigger all related actions
                 return True
+        return None
 
     def __str__(self) -> str:
         result = f"{self.getLotName()}, lotStatus={self.lotStatus}"
@@ -915,33 +903,35 @@ class LIGridTradingLot(LIGridBaseLot):
     def printTicketPrice(self, orderTicket: OrderTicket):
         priceType = None
         orderPrice = None
-        if orderTicket.OrderType == OrderType.StopLimit:
+        if orderTicket.order_type == OrderType.STOP_LIMIT:
             priceType = "stopLimitPrice"
-            orderPrice = f"{orderTicket.Get(OrderField.StopPrice)}/{orderTicket.Get(OrderField.LimitPrice)}"
-        elif orderTicket.OrderType == OrderType.TrailingStop:
+            orderPrice = f"{orderTicket.get(OrderField.STOP_PRICE)}/{orderTicket.get(OrderField.LIMIT_PRICE)}"
+        elif orderTicket.order_type == OrderType.TRAILING_STOP:
             priceType = "trailingStopPrice"
-            orderPrice = f"{orderTicket.Get(OrderField.StopPrice)}/{orderTicket.Get(OrderField.TrailingAmount)}"
-        elif orderTicket.OrderType == OrderType.StopMarket:
+            orderPrice = f"{orderTicket.get(OrderField.STOP_PRICE)}/{orderTicket.get(OrderField.TRAILING_AMOUNT)}"
+        elif orderTicket.order_type == OrderType.STOP_MARKET:
             priceType = "stopMarketPrice"
-            orderPrice = f"{orderTicket.Get(OrderField.StopPrice)}"
-        elif orderTicket.OrderType == OrderType.Limit:
+            orderPrice = f"{orderTicket.get(OrderField.STOP_PRICE)}"
+        elif orderTicket.order_type == OrderType.LIMIT:
             priceType = "limitPrice"
-            orderPrice = f"{orderTicket.Get(OrderField.LimitPrice)}"
-        elif orderTicket.OrderType == OrderType.Market:
+            orderPrice = f"{orderTicket.get(OrderField.LIMIT_PRICE)}"
+        elif orderTicket.order_type == OrderType.MARKET:
             priceType = "marketPrice"
-            orderPrice = f"{self.positionManager.getMarketPrice()}"
+            orderPrice = f"{self.gridTrading.getMarketPrice()}"
         return f"{priceType}={orderPrice}, " if priceType else ""
 
     def printOrderTicket(self, ticket: OrderTicket):
         if ticket is None:
             return "None"
-        return f"[orderId={ticket.OrderId}, status={getEnumName(ticket.Status, OrderStatus)}, " \
-               f"filledPrice={self.positionManager.roundSecurityPrice(ticket.AverageFillPrice)}, " \
-               f"filledQuantity={self.positionManager.roundSecuritySize(ticket.QuantityFilled)}, {self.printTicketPrice(ticket)}" \
-               f"updatedTime={ticket.Time.strftime(LIGlobal.minuteFormat)}, tag=[{ticket.Tag}]."
+        return f"[orderId={ticket.order_id}, status={str(ticket.status)}, " \
+               f"filledPrice={self.positionManager.roundSecurityPrice(ticket.average_fill_price)}, " \
+               f"filledQuantity={self.positionManager.roundSecuritySize(ticket.quantity_filled)}, {self.printTicketPrice(ticket)}" \
+               f"updatedTime={ticket.time.strftime(LIGlobal.minuteFormat)}, tag=[{ticket.tag}]."
 
-    def printGridLotPrices(self):
-        result = f"startPrice={self.getStartPrice()}"
+    def printAncillaryPrices(self):
+        result = ""
+        if self.isNotCommandMode():
+            result += f"startPrice={self.getStartPrice()}"
         if self.getOpenFromPrice():
             result += f", openFromPrice={self.getOpenFromPrice()}"
         if self.gridTrading.bollingerBandsIndicator:

@@ -1,14 +1,10 @@
-# region imports
-import copy
-
-from deprecated import *
+from AlgorithmImports import *
 from core.LITrading import *
 from core.LIGridTradingLot import *
+from indicator.LIComboTrendingIndicator import *
 from indicator.LIBollingerBandsIndicator import *
-from indicator.LIStochasticComboIndicator import *
-from indicator.LIMACDTrendFollowingIndicator import *
 
-# endregion
+import copy
 
 """
 LIGridBase helps to prevent LIGridTrading growing too big and exceeding the maximum size of 128,000 characters.
@@ -77,11 +73,10 @@ class LIGridBase(LITrading):
         self.gridShortLotsQty = configs.get(LIConfigKey.gridShortLotsQty, LIDefault.gridShortLotsQty)
         self.gridSortSkewedLots = configs.get(LIConfigKey.gridSortSkewedLots, LIDefault.gridSortSkewedLots)
         self.gridHeikinAshiPlies = configs.get(LIConfigKey.gridHeikinAshiPlies, LIDefault.gridHeikinAshiPlies)
-        self.gridUseTradeInsight = configs.get(LIConfigKey.gridUseTradeInsight, LIDefault.gridUseTradeInsight)
-        self.gridBaselinePrice = configs.get(LIConfigKey.gridBaselinePrice, LIDefault.gridBaselinePrice)
         self.gridLimitStartPrices = configs.get(LIConfigKey.gridLimitStartPrices, LIDefault.gridLimitStartPrices)
         self.gridResetStartPrices = configs.get(LIConfigKey.gridResetStartPrices, LIDefault.gridResetStartPrices)
         self.gridFixedStartPrices = configs.get(LIConfigKey.gridFixedStartPrices, LIDefault.gridFixedStartPrices)
+        self.gridSignalStartPrices = configs.get(LIConfigKey.gridSignalStartPrices, LIDefault.gridSignalStartPrices)
         self.gridFixedOpenFromPrices = configs.get(LIConfigKey.gridFixedOpenFromPrices, LIDefault.gridFixedOpenFromPrices)
         self.gridResetLotsMetadata = configs.get(LIConfigKey.gridResetLotsMetadata, LIDefault.gridResetLotsMetadata)
         self.gridRolloverCriteria = configs.get(LIConfigKey.gridRolloverCriteria, LIDefault.gridRolloverCriteria)
@@ -117,7 +112,6 @@ class LIGridBase(LITrading):
         self.gridRealignForMaxHolding = configs.get(LIConfigKey.gridRealignForMaxHolding, LIDefault.gridRealignForMaxHolding)
         self.gridRestartOnFridayClose = configs.get(LIConfigKey.gridRestartOnFridayClose, LIDefault.gridRestartOnFridayClose)
         self.gridRestartIfAllLotsPaused = configs.get(LIConfigKey.gridRestartIfAllLotsPaused, LIDefault.gridRestartIfAllLotsPaused)
-        self.gridPauseTradingProfitHours = configs.get(LIConfigKey.gridPauseTradingProfitHours, LIDefault.gridPauseTradingProfitHours)
 
         self.gridBoostingKeepTrading = configs.get(LIConfigKey.gridBoostingKeepTrading, LIDefault.gridBoostingKeepTrading)
         self.gridBoostingTriggerAmount = configs.get(LIConfigKey.gridBoostingTriggerAmount, LIDefault.gridBoostingTriggerAmount)
@@ -152,8 +146,10 @@ class LIGridBase(LITrading):
             terminate(f"Please specify either {LIConfigKey.gridFixedStartPrices} or {LIConfigKey.gridInitOpenedLots}!")
         if self.gridFixedStartPrices and self.gridRetainOpenedLots:
             terminate(f"Please specify either {LIConfigKey.gridFixedStartPrices} or {LIConfigKey.gridRetainOpenedLots}!")
-        if self.gridResetStartPrices and self.gridFixedStartPrices:
+        if self.gridFixedStartPrices and self.gridResetStartPrices:
             terminate(f"Please specify either {LIConfigKey.gridResetStartPrices} or {LIConfigKey.gridFixedStartPrices}!")
+        if self.gridFixedStartPrices and self.gridSignalStartPrices:
+            terminate(f"Please specify either {LIConfigKey.gridFixedStartPrices} or {LIConfigKey.gridSignalStartPrices}!")
         if self.gridFixedStartPrices and self.gridFollowAdverseTrend:
             terminate(f"Please specify either {LIConfigKey.gridFixedStartPrices} or {LIConfigKey.gridFollowAdverseTrend}!")
         if self.gridFixedStartPrices and self.gridStickToMarketTrend:
@@ -168,7 +164,7 @@ class LIGridBase(LITrading):
             terminate(f"Please specify either {LIConfigKey.gridResetLotsMetadata} or {LIConfigKey.gridInitializeSession}!")
         if self.gridLotLevelAmount and self.gridLotLevelPercent:
             terminate(f"Please specify either {LIConfigKey.gridLotLevelAmount} or {LIConfigKey.gridLotLevelPercent}!")
-        if not self.gridLotLevelAmount and not self.gridLotLevelPercent:
+        if self.isNotCommandMode() and not self.gridLotLevelAmount and not self.gridLotLevelPercent:
             terminate(f"Please specify either {LIConfigKey.gridLotLevelAmount} or {LIConfigKey.gridLotLevelPercent}!")
         if self.gridHedgeEnabled:
             reason = f"{LIConfigKey.gridHedgeEnabled}={self.gridHedgeEnabled}"
@@ -176,21 +172,16 @@ class LIGridBase(LITrading):
                 terminate(f"Please specify {LIConfigKey.gridHedgeOverLosingLots} since {reason}!")
             if self.gridLongLots != self.gridShortLots:
                 terminate(f"Please specify the same long and short lots since {reason}!")
-        if self.investAmount.maxHolding and not self.gridLotMinQuantity:
+        if self.isNotCommandMode() and self.investAmount.maxHolding and not self.gridLotMinQuantity:
             terminate(f"Please specify {LIConfigKey.gridLotMinQuantity} since maxHolding={self.investAmount.maxHolding}!")
-        if self.investAmount.maxCapital and not self.gridLotMinQuantity:
+        if self.isNotCommandMode() and self.investAmount.maxCapital and not self.gridLotMinQuantity:
             terminate(f"Please specify {LIConfigKey.gridLotMinQuantity} since maxCapital={self.investAmount.maxCapital}!")
         if isNotLiveMode() and self.gridInitializeSession is None:
             terminate(f"Please specify {LIConfigKey.gridInitializeSession} explicitly for backtest mode!")
 
         # Verify grid settings' integrity upon grid mode
-        if self.gridBaselinePrice:
-            if self.gridLotLevelPercent:
-                log(f"Please note {LIConfigKey.gridBaselinePrice} can only apply to {LIConfigKey.gridLotLevelAmount}!")
-            if self.liquidateOnTakeProfitPercent:
-                log(f"Please note {LIConfigKey.gridBaselinePrice} can only apply to {LIConfigKey.liquidateOnTakeProfitPercent}!")
-            if self.liquidateOnStopLossPercent:
-                log(f"Please note {LIConfigKey.gridBaselinePrice} can only apply to {LIConfigKey.liquidateOnStopLossPercent}!")
+        if self.isContrarianMode() and self.openWithMarketOrderType:
+            terminate(f"Please disable {LIConfigKey.openWithMarketOrderType} for {self.gridMode} mode!")
         if self.gridLimitStartPrices:
             if self.gridLongLots and not self.gridLimitStartPrices.get(self.getGridLongSide()):
                 terminate(f"Please specify both {LIConfigKey.gridLongLots} and {LIConfigKey.gridLimitStartPrices}[{self.getGridLongSide()}]!")
@@ -261,10 +252,10 @@ class LIGridBase(LITrading):
             if self.gridResetStartPrices and not (
                     self.gridResetStartPrices.get(self.getGridLongSide()) and self.gridResetStartPrices.get(self.getGridShortSide())):
                 terminate(f"Please specify both {self.getGridLongSide()} and {self.getGridShortSide()} for {LIConfigKey.gridResetStartPrices}!")
-            if not (self.gridUseTradeInsight or self.gridLimitStartPrices or
-                    self.gridFixedStartPrices or self.gridResetStartPrices or self.gridBandingStartPrices):
-                terminate(f"Please specify one of {LIConfigKey.gridUseTradeInsight}, {LIConfigKey.gridLimitStartPrices}, {LIConfigKey.gridFixedStartPrices}, "
-                          f"{LIConfigKey.gridResetStartPrices} or {LIConfigKey.gridBandingStartPrices}!")
+            if not (self.marketBias or self.gridLimitStartPrices or self.gridFixedStartPrices or self.gridResetStartPrices or
+                    self.gridBandingStartPrices or self.gridBandingLimitStartPrices):
+                terminate(f"Please specify one of {LIConfigKey.marketBias}, {LIConfigKey.gridLimitStartPrices}, {LIConfigKey.gridFixedStartPrices}, "
+                          f"{LIConfigKey.gridResetStartPrices}, {LIConfigKey.gridBandingStartPrices} or {LIConfigKey.gridBandingLimitStartPrices}!")
         if self.isBuyAndHoldMode():
             if self.gridShortLots or not self.gridLongLots:
                 terminate(f"Please specify only {LIConfigKey.gridLongLots} for {LIConfigKey.gridMode}={self.gridMode}!")
@@ -303,24 +294,23 @@ class LIGridBase(LITrading):
         # securityMonitor = signalSymbolMonitor when signalSymbolStr = tradeSymbolStr
         self.securityMonitor = self.getSecurityMonitor(self.tradeSymbolStr, self.tradeSecurityType)
         self.positionManager = self.getPositionManager(self.securityMonitor)
-        # Not to liquidate in position manager, will be taken care in this strategy itself!
-        self.positionManager.delegateLiquidateRemovedSecurity = True
         self.canonicalSymbol = self.positionManager.getCanonicalSymbol()
 
+        self.lastBar = None
         self.gridHeikinAshies: list[HeikinAshi] = []
         if self.gridHeikinAshiPlies:
             for n in range(self.gridHeikinAshiPlies):
                 heikinAshi = HeikinAshi(str(n))
                 heikinAshi.updated += self.onHeikinAshiUpdated  # Call back to update other indicators
                 self.gridHeikinAshies.append(heikinAshi)
+        self.comboTrendingIndicator: LIComboTrendingIndicator = None
+        if self.comboTrendingParams:
+            self.comboTrendingIndicator = self.getComboTrendingIndicator(self.signalSymbolMonitor, self.positionManager)
+            self.comboTrendingIndicator.subscribeTradeInsight(self)
         self.bollingerBandsIndicator: LIBollingerBandsIndicator = None
         if self.bollingerBandsParams:
             self.bollingerBandsIndicator = self.getBollingerBandsIndicator(self.signalSymbolMonitor, self.positionManager)
             self.bollingerBandsIndicator.subscribeTradeInsight(self)
-        self.stochasticComboIndicator: LIStochasticComboIndicator = None
-        if self.stochasticComboParams:
-            self.stochasticComboIndicator = self.getStochasticComboIndicator(self.signalSymbolMonitor, self.positionManager)
-            self.stochasticComboIndicator.subscribeTradeInsight(self)
         if self.gridBandingStartPrices:
             for bandName in self.gridBandingStartPrices.values():
                 if not self.bollingerBandsIndicator.getBand(bandName):
@@ -338,9 +328,9 @@ class LIGridBase(LITrading):
                               f"{self.bollingerBandsIndicator.getBandNames()}!")
 
         if self.isMomentumMode():
-            getAlgo().SetTradeBuilder(TradeBuilder(FillGroupingMethod.FillToFill, FillMatchingMethod.FIFO))
+            getAlgo().set_trade_builder(TradeBuilder(FillGroupingMethod.FILL_TO_FILL, FillMatchingMethod.FIFO))
         elif self.isContrarianMode():
-            getAlgo().SetTradeBuilder(TradeBuilder(FillGroupingMethod.FillToFill, FillMatchingMethod.LIFO))
+            getAlgo().set_trade_builder(TradeBuilder(FillGroupingMethod.FILL_TO_FILL, FillMatchingMethod.LIFO))
 
         self.gridMetadataKey = None
         self.gridLotsMetadataKey = None
@@ -359,6 +349,7 @@ class LIGridBase(LITrading):
         self.invalidOrderCount = 0  # Tracking how many orders been rejected/denied!
         self.shiftedGridLotsCount = 0
 
+        self.flipToSignalType = None
         self.reachedOpenPrice = False
         self.liquidatedAlready = False
         self.liquidateByTrailingProfit = 0.0  # Tracking trailing stop profit price/amount/percent for liquidation
@@ -366,11 +357,10 @@ class LIGridBase(LITrading):
 
         self.closedTradesCount = 0
         self.stoppedLossPrices = {}  # NOT exceed this red/bottom line!
-        self.realizedProfitLoss = 0.0
         self.pauseTradingTillTime = None
 
         # Dollar-Cost Averaging (DCA)
-        self.dcaMaxStartPrice = 0
+        self.dcaMaxStartPrice = 0.0
         self.dcaHoldingQuantity = 0
         self.dcaLastInvestedDate: datetime = None
 
@@ -378,15 +368,204 @@ class LIGridBase(LITrading):
         self.startBandName = None
         self.tradingTierName = None
 
-        self.accruedFees: float = 0.0
         self.openOrderTicket: OrderTicket = None
         self.closeOrderTicket: OrderTicket = None
         self.avgFilledOpenPrice = None
         self.trailingStopPrice = None
         self.closeOrderUpdatedTimes = 0
 
+    def getPeriodicityTimedelta(self) -> timedelta:
+        if self.dcaInvestPeriodicity == LIPeriodicity.DAILY:
+            return timedelta(days=1)
+        elif self.dcaInvestPeriodicity == LIPeriodicity.WEEKLY:
+            return timedelta(weeks=1)
+        elif self.dcaInvestPeriodicity == LIPeriodicity.MONTHLY:
+            return timedelta(weeks=4)
+        else:
+            terminate(f"Not support {LIConfigKey.dcaInvestPeriodicity}={self.dcaInvestPeriodicity}")
+            return None
+
+    def getHeadLot(self):
+        lot = self.startLot
+        while lot and lot.prevLot:
+            lot = lot.prevLot
+        return lot
+
+    def getTailLot(self):
+        lot = self.startLot
+        while lot and lot.nextLot:
+            lot = lot.nextLot
+        return lot
+
+    def getTradeLot(self):
+        lot = self.getHeadLot()
+        while lot:
+            if lot.isTradeLot():
+                return lot
+            lot = lot.nextLot
+        return lot
+
+    def getFirstLot(self, peerLot):
+        if peerLot.isLongLot():
+            return self.getFirstLongLot()
+        if peerLot.isShortLot():
+            return self.getFirstShortLot()
+        return None
+
+    def getLastLot(self, peerLot):
+        if peerLot.isLongLot():
+            return self.getLastLongLot()
+        if peerLot.isShortLot():
+            return self.getLastShortLot()
+        return None
+
+    def getLotById(self, lotId):
+        lot = self.getHeadLot()
+        while lot:
+            if lot.lotId == lotId:
+                return lot
+            lot = lot.nextLot
+        return None
+
+    def getLastOpenedLot(self, peerLot):
+        if peerLot.isLongLot():
+            return self.getLastOpenedLongLot()
+        if peerLot.isShortLot():
+            return self.getLastOpenedShortLot()
+        return None
+
+    def getCounterpartLot(self, peerLot):
+        lot = self.getHeadLot()
+        while lot:
+            if lot.lotId == -peerLot.lotId:
+                return lot
+            lot = lot.nextLot
+        return None
+
+    def getLastOpenedCounterpartLot(self, peerLot):
+        if peerLot.isLongLot():
+            return self.getLastOpenedShortLot()
+        if peerLot.isShortLot():
+            return self.getLastOpenedLongLot()
+        return None
+
+    def getFirstOpenedCounterpartLot(self, peerLot):
+        if peerLot.isLongLot():
+            return self.getFirstOpenedShortLot()
+        if peerLot.isShortLot():
+            return self.getFirstOpenedLongLot()
+        return None
+
+    def getFirstOpenedLongLot(self):
+        lot = self.startLot.nextLot
+        while lot:
+            if lot.hasOpenPosition():
+                return lot
+            lot = lot.nextLot
+        return None
+
+    def getLastOpenedLongLot(self):
+        lastOpenedLot = None
+        lot = self.startLot.nextLot
+        while lot:
+            if lot.hasOpenPosition():
+                lastOpenedLot = lot
+            lot = lot.nextLot
+        return lastOpenedLot
+
+    def getLastLongLot(self):
+        lot = self.getTailLot()
+        return lot if lot.isLongLot() else None
+
+    def getLastShortLot(self):
+        lot = self.getHeadLot()
+        return lot if lot.isShortLot() else None
+
+    def getFirstLongLot(self):
+        return self.startLot.nextLot
+
+    def getFirstShortLot(self):
+        return self.startLot.prevLot
+
+    def getFirstOpenedShortLot(self):
+        lot = self.startLot.prevLot
+        while lot:
+            if lot.hasOpenPosition():
+                return lot
+            lot = lot.prevLot
+        return None
+
+    def getLastOpenedShortLot(self):
+        lastOpenedLot = None
+        lot = self.startLot.prevLot
+        while lot:
+            if lot.hasOpenPosition():
+                lastOpenedLot = lot
+            lot = lot.prevLot
+        return lastOpenedLot
+
+    def getSecondLongLot(self):
+        if self.getFirstLongLot():
+            return self.getFirstLongLot().nextLot
+        return None
+
+    def getSecondShortLot(self):
+        if self.getFirstShortLot():
+            return self.getFirstShortLot().prevLot
+        return None
+
+    def getNextOpeningLongLot(self):
+        if self.getLastOpenedLongLot():
+            return self.getLastOpenedLongLot().nextLot
+        else:
+            return self.getFirstLongLot()
+
+    def getNextOpeningShortLot(self):
+        if self.getLastOpenedShortLot():
+            return self.getLastOpenedShortLot().prevLot
+        else:
+            return self.getFirstShortLot()
+
+    def addLastLongLot(self):
+        # Add new lot to tail
+        tail = self.getTailLot()
+        temp = self.createGridLot(tail.lotId + 1)
+        tail.nextLot = temp
+        temp.prevLot = tail
+        tail = temp
+        return tail
+
+    def addLastShortLot(self):
+        # Add new lot to head
+        head = self.getHeadLot()
+        temp = self.createGridLot(head.lotId - 1)
+        temp.nextLot = head
+        head.prevLot = temp
+        head = temp
+        return head
+
+    def dropLastLongLot(self):
+        lastLongLot = self.getLastLongLot()  # Drop this last long lot
+        if lastLongLot:
+            lastLongLot.prevLot.nextLot = None
+            lastLongLot.prevLot = None
+        return lastLongLot
+
+    def dropLastShortLot(self):
+        lastShortLot = self.getLastShortLot()  # Drop this last short lot
+        if lastShortLot:
+            lastShortLot.nextLot.prevLot = None
+            lastShortLot.nextLot = None
+        return lastShortLot
+
     def tradeBothSides(self) -> bool:
         return self.gridLongLots and self.gridShortLots
+
+    def isCommandMode(self):
+        return self.gridMode == LIGridMode.COMMAND
+
+    def isNotCommandMode(self):
+        return self.gridMode != LIGridMode.COMMAND
 
     def isBoostingMode(self):
         return self.gridMode == LIGridMode.BOOSTING
@@ -401,6 +580,207 @@ class LIGridBase(LITrading):
     def isBuyAndHoldMode(self):
         return self.gridMode == LIGridMode.BUYANDHOLD
 
+    def countTradeLots(self):
+        longLotsCount, shortLotsCount = 0, 0
+        lot = self.getTradeLot()
+        while lot:
+            if lot.isLongLot():
+                longLotsCount += 1
+            if lot.isShortLot():
+                shortLotsCount += 1
+            lot = lot.getNextLot()
+        return longLotsCount + shortLotsCount, longLotsCount, shortLotsCount
+
+    def countLongLots(self):
+        return self.countTradeLots()[1]
+
+    def countShortLots(self):
+        return self.countTradeLots()[2]
+
+    def countAllTrades(self):
+        tradesCount = 0
+        lot = self.getTradeLot()
+        while lot:
+            if lot.hasOpenPosition():
+                tradesCount += 1
+            tradesCount += lot.closedTradesCount
+            lot = lot.getNextLot()
+        return tradesCount
+
+    def countFilledLots(self, peerLot=None):
+        longLotsCount, shortLotsCount = 0, 0
+        lot = self.getTradeLot()
+        while lot:
+            if lot.hasOpenPosition():
+                if lot.isLongLot():
+                    longLotsCount += 0 if peerLot and peerLot.lotId * lot.lotId < 0 else 1
+                if lot.isShortLot():
+                    shortLotsCount += 0 if peerLot and peerLot.lotId * lot.lotId < 0 else 1
+            lot = lot.getNextLot()
+        if peerLot:
+            return longLotsCount if peerLot.isLongLot() else shortLotsCount
+        else:
+            return longLotsCount + shortLotsCount, longLotsCount, shortLotsCount
+
+    def countLosingLots(self, peerLot=None):
+        longLotsCount, shortLotsCount = 0, 0
+        lot = self.getTradeLot()
+        while lot:
+            if lot.isLosingLot():
+                if lot.isLongLot():
+                    longLotsCount += 0 if peerLot and peerLot.lotId * lot.lotId < 0 else 1
+                if lot.isShortLot():
+                    shortLotsCount += 0 if peerLot and peerLot.lotId * lot.lotId < 0 else 1
+            lot = lot.getNextLot()
+        if peerLot:
+            return longLotsCount if peerLot.isLongLot() else shortLotsCount
+        else:
+            return longLotsCount + shortLotsCount, longLotsCount, shortLotsCount
+
+    def countPausedLots(self, peerLot=None):
+        pausedLotsCount = 0
+        lot = self.getTradeLot()
+        while lot:
+            pausedLotsCount += (0 if peerLot and peerLot.lotId * lot.lotId < 0 else (1 if lot.pausedOpening else 0))
+            lot = lot.getNextLot()
+        return pausedLotsCount
+
+    def getInvestedCapital(self):
+        investedCapital = 0
+        lot = self.getTradeLot()
+        while lot:
+            investedCapital += lot.getInvestedCapital()
+            lot = lot.getNextLot()
+        return round(investedCapital, LIGlobal.moneyPrecision)
+
+    def initializeGridLots(self):
+        if self.countTradeLots()[0] == 0:
+            self.startLot = self.createGridLot(0)
+            if self.gridLongLots:
+                for idx in range(self.gridLongLots):
+                    self.addLastLongLot()
+            if self.gridShortLots:
+                for idx in range(self.gridShortLots):
+                    self.addLastShortLot()
+
+    def createGridLots(self, maxLots):
+        if self.startLot is None:
+            self.startLot = self.createGridLot(0)
+        if maxLots > 0:
+            lot = self.startLot.nextLot
+            for idx in range(maxLots):
+                if lot is None:
+                    lot = self.addLastLongLot()
+                lot = lot.nextLot
+        if maxLots < 0:
+            lot = self.startLot.prevLot
+            for idx in range(abs(maxLots)):
+                if lot is None:
+                    lot = self.addLastShortLot()
+                lot = lot.prevLot
+
+    def createGridLot(self, lotId):
+        return LIGridTradingLot(lotId, self)
+
+    def resetGridLotIds(self):
+        temp = self.startLot
+        while temp.nextLot:
+            temp.nextLot.lotId = temp.lotId + 1
+            temp = temp.nextLot
+        temp = self.startLot
+        while temp.prevLot:
+            temp.prevLot.lotId = temp.lotId - 1
+            temp = temp.prevLot
+
+    def getGridLongSide(self):
+        if self.isMomentumMode():
+            return LIGridSide.BTU
+        elif self.isContrarianMode():
+            return LIGridSide.BTD
+        return None
+
+    def getGridShortSide(self):
+        if self.isMomentumMode():
+            return LIGridSide.STD
+        elif self.isContrarianMode():
+            return LIGridSide.STU
+        return None
+
+    def getTradeInsight(self):
+        # Overwrite signal type if flip to signal type is enforced!
+        if self.tradeInsight and self.flipToSignalType and self.flipToSignalType != LISignalType.NONE and self.flipToSignalType != self.tradeInsight.signalType:
+            tradeInsight = copy.copy(self.tradeInsight)  # Shallow copy to avoid modifying the original signal
+            tradeInsight.signalType = self.flipToSignalType
+            return tradeInsight
+        return self.tradeInsight
+
+    def getGridTradingSide(self):
+        return self.getGridLongSide() if self.getInvestedQuantity() >= 0 else self.getGridShortSide()
+
+    def countOrderTickets(self):
+        orderTicketsCount = 0
+        for orderTicket in self.positionManager.getActiveOrderTickets():
+            if isOrderTicketUpdatable(orderTicket):
+                orderTicketsCount += 1
+        return orderTicketsCount
+
+    def countOpenOrders(self, peerLot=None):
+        openOrdersCount = 0
+        lot = self.getTradeLot()
+        while lot:
+            if lot.hasOpenOrderTicket():
+                openOrdersCount += (0 if peerLot and peerLot.lotId * lot.lotId < 0 else 1)
+            lot = lot.getNextLot()
+        return openOrdersCount
+
+    def cancelOpenOrders(self, peerLot=None, tagLog=None):
+        openOrdersCount = 0
+        lot = self.getTradeLot()
+        while lot:
+            if not peerLot or arePeerLots(lot, peerLot):
+                lot.cancelOpenOrderTicket(tagLog)
+            openOrdersCount += 1
+            lot = lot.getNextLot()
+        return openOrdersCount
+
+    def countCloseOrders(self, peerLot=None):
+        closeOrdersCount = 0
+        lot = self.getTradeLot()
+        while lot:
+            if lot.hasCloseOrderTicket():
+                closeOrdersCount += (0 if peerLot and peerLot.lotId * lot.lotId < 0 else 1)
+            lot = lot.getNextLot()
+        return closeOrdersCount
+
+    def cancelCloseOrders(self, tagLog=None):
+        closeOrdersCount = 0
+        lot = self.getTradeLot()
+        while lot:
+            lot.cancelCloseOrderTicket(tagLog)
+            closeOrdersCount += 1
+            lot = lot.getNextLot()
+        return closeOrdersCount
+
+    def getOpeningQuantity(self):
+        filledQuantity = 0
+        lot = self.getTradeLot()
+        while lot:
+            filledQuantity += lot.filledOpenQuantity
+            if lot.isPausedLot() and lot.filledOpenQuantity:
+                terminate(f"The paused grid lot should NOT have filled quantity!")
+            lot = lot.getNextLot()
+        return self.positionManager.roundSecuritySize(filledQuantity)
+
+    def getClosingQuantity(self):
+        closingQuantity = 0
+        lot = self.getTradeLot()
+        while lot:
+            closingQuantity += lot.getClosingQuantity()
+            if lot.isPausedLot() and lot.getClosingQuantity():
+                terminate(f"The paused grid lot should NOT have filled quantity!")
+            lot = lot.getNextLot()
+        return self.positionManager.roundSecuritySize(closingQuantity)
+
     def getCounterpartMode(self):
         if self.gridMode == LIGridMode.MOMENTUM:
             return LIGridMode.CONTRARIAN
@@ -410,13 +790,23 @@ class LIGridBase(LITrading):
             return LIGridMode.BUYANDHOLD
         else:
             terminate(f"Not able to reverse the {LIConfigKey.gridMode}={self.gridMode}")
+            return None
 
-    def getTradeInsight(self):
-        if self.stochasticComboIndicator:
-            return self.stochasticComboIndicator.getTradeInsight()
-        if self.bollingerBandsIndicator:
-            return self.bollingerBandsIndicator.getTradeInsight()
-        return super().getTradeInsight()
+    def adjustGridHedgeLots(self, lots):
+        if lots == 0:
+            self.startLot.nextLot = None
+            self.startLot.prevLot = None
+        if lots > 0:
+            while self.countLongLots() < lots:
+                self.addLastLongLot()
+            while self.countLongLots() > lots:
+                self.dropLastLongLot().resetTradingLot(reason="Drop last long lot")
+        if lots < 0:
+            while self.countShortLots() < abs(lots):
+                self.addLastShortLot()
+            while self.countShortLots() > abs(lots):
+                self.dropLastShortLot().resetTradingLot(reason="Drop last short lot")
+        self.resetGridLotIds()  # Set proper sequential ids
 
     def getTradingTierFactorIndex(self):
         tierIndex = int(self.tradingTierName.split("-")[1][1:])
@@ -424,92 +814,21 @@ class LIGridBase(LITrading):
         tierFactorIndex = (bandCounts[1] - tierIndex) if ("upper" in self.tradingTierName) else (bandCounts[0] - bandCounts[1] + tierIndex)
         return tierFactorIndex
 
-    def getHedgeInsightIndicator(self, securityMonitor: LISecurityMonitor, positionManager: LIPositionManager) -> LIInsightIndicator:
+    def getComboTrendingIndicator(self, securityMonitor: LISecurityMonitor, positionManager: LIPositionManager) -> LIComboTrendingIndicator:
         symbolKey = securityMonitor.getSymbolKey()
         insightIndicator = self.insightIndicators.get(symbolKey)
         if insightIndicator is None:
-            insightIndicator = LIMACDTrendFollowingIndicator(securityMonitor, positionManager, self.mainChart, self.configs)
+            insightIndicator = LIComboTrendingIndicator(securityMonitor, positionManager, self.mainChart, self.configs)
             self.insightIndicators[symbolKey] = insightIndicator
         return insightIndicator
 
-    def getBollingerBandsIndicator(self, securityMonitor: LISecurityMonitor, positionManager: LIPositionManager) -> LIInsightIndicator:
+    def getBollingerBandsIndicator(self, securityMonitor: LISecurityMonitor, positionManager: LIPositionManager) -> LIBollingerBandsIndicator:
         symbolKey = securityMonitor.getSymbolKey()
         insightIndicator = self.insightIndicators.get(symbolKey)
         if insightIndicator is None:
             insightIndicator = LIBollingerBandsIndicator(securityMonitor, positionManager, self.mainChart, self.configs)
             self.insightIndicators[symbolKey] = insightIndicator
         return insightIndicator
-
-    def getStochasticComboIndicator(self, securityMonitor: LISecurityMonitor, positionManager: LIPositionManager) -> LIInsightIndicator:
-        symbolKey = securityMonitor.getSymbolKey()
-        insightIndicator = self.insightIndicators.get(symbolKey)
-        if insightIndicator is None:
-            insightIndicator = LIStochasticComboIndicator(securityMonitor, positionManager, self.mainChart, self.configs)
-            self.insightIndicators[symbolKey] = insightIndicator
-        return insightIndicator
-
-    @deprecated(reason="Use cancelActiveOrders() and resubmit order tickets instead.")
-    def assignOpenOrderTickets(self):
-        """
-        Detect all active (open/close) order tickets and assign to proper trading grid lots!
-        Not been used as the open order tickets could be stale and status unknown!
-        """
-        if self.positionManager.getInvestedQuantity() > 0:  # The long side
-            orderTickets.sort(key=lambda x: x.Get(OrderField.LimitPrice), reverse=True)
-            for orderTicket in orderTickets:
-                assignedLot = False
-                tradingLot = self.startLot.nextLot
-                while tradingLot:
-                    if tradingLot.isLongLot() and not tradingLot.hasOrderTickets():
-                        if orderTicket.Quantity > 0:  # An opening order
-                            tradingLot.openOrderTicket = orderTicket
-                            assignedLot = True
-                            break
-                        elif orderTicket.Quantity < 0:  # A closing order
-                            tradingLot.filledOpenQuantity = -orderTicket.Quantity
-                            tradingLot.closeOrderTicket = orderTicket
-                            assignedLot = True
-                            break
-                    tradingLot = tradingLot.nextLot
-                if not assignedLot:
-                    tagLog = f"Cancel an order as failed to assign to a lot: {orderTicket}."
-                    self.positionManager.cancelOrder(orderTicket, tagLog)
-        elif self.positionManager.getInvestedQuantity() < 0:  # The short side
-            orderTickets.sort(key=lambda x: x.Get(OrderField.LimitPrice), reverse=False)
-            for orderTicket in orderTickets:
-                assignedLot = False
-                tradingLot = self.startLot.prevLot
-                while tradingLot:
-                    if tradingLot.isShortLot() and not tradingLot.hasOrderTickets():
-                        if orderTicket.Quantity < 0:  # A opening order
-                            tradingLot.openOrderTicket = orderTicket
-                            assignedLot = True
-                            break
-                        elif orderTicket.Quantity > 0:  # A closing order
-                            tradingLot.filledOpenQuantity = -orderTicket.Quantity
-                            tradingLot.closeOrderTicket = orderTicket
-                            assignedLot = True
-                            break
-                    tradingLot = tradingLot.prevLot
-                if not assignedLot:
-                    tagLog = f"Cancel an order as failed to assign to a lot: {orderTicket}."
-                    self.positionManager.cancelOrder(orderTicket, tagLog)
-
-    def adjustGridHedgeLots(self, lots):
-        if lots == 0:
-            self.startLot.nextLot = None
-            self.startLot.prevLot = None
-        if lots > 0:
-            while len(self.getLongLots()) < lots:
-                self.addLastLongLot()
-            while len(self.getLongLots()) > lots:
-                self.dropLastLongLot().resetTradingLot(reason="Drop last long lot")
-        if lots < 0:
-            while len(self.getShortLots()) < abs(lots):
-                self.addLastShortLot()
-            while len(self.getShortLots()) > abs(lots):
-                self.dropLastShortLot().resetTradingLot(reason="Drop last short lot")
-        self.resetGridLotIds()  # Set proper sequential ids
 
     def initializeMetadata(self):
         # Map of grid trading metadata: {key1: value2, key2: value2}
@@ -524,23 +843,6 @@ class LIGridBase(LITrading):
 
         self.gridMetadata: dict = readMetadata(self.gridMetadataKey, "dict", default={})
         self.gridLotsMetadata: dict = readMetadata(self.gridLotsMetadataKey, "dict", default={})
-
-        # Migrate metadata if necessary, comment out once migrated!
-        # if not self.gridInitializeSession:
-        #     if not self.gridMetadata:
-        #         log(f"{self.getSymbolAlias()}: Migrating grid metadata...")
-        #         gridMetadataKey = self.tradeSymbolStr + "/gridMetadata"
-        #         self.gridMetadata = readMetadata(gridMetadataKey, "dict", default={})
-        #         self.gridMetadata[LIMetadataKey.version] = LIGlobal.latestVersion
-        #         saveMetadata(self.gridMetadataKey, self.gridMetadata, logging=True)
-        #         deleteMetadata(gridMetadataKey, logging=True)
-        #     if not self.gridLotsMetadata:
-        #         log(f"{self.getSymbolAlias()}: Migrating grid lots metadata...")
-        #         gridLotsMetadataKey = self.tradeSymbolStr + "/gridLotsMetadata"
-        #         self.gridLotsMetadata = readMetadata(gridLotsMetadataKey, "dict", default={})
-        #         saveMetadata(self.gridLotsMetadataKey, self.gridLotsMetadata, logging=True)
-        #         deleteMetadata(gridLotsMetadataKey, logging=True)
-        #     checkMetadataVersion(self.gridMetadata)
 
         self.gridMode = self.gridMetadata.get(LIMetadataKey.gridMode, self.gridMode)
         if not self.isBoostingMode():
@@ -582,17 +884,18 @@ class LIGridBase(LITrading):
         if self.bollingerBandsIndicator:
             self.gridMetadata[LIMetadataKey.startBandName] = self.startBandName
             self.gridMetadata[LIMetadataKey.tradingTierName] = self.tradingTierName
-        if self.stochasticComboIndicator:
-            self.gridMetadata[LIMetadataKey.tradeInsight] = self.stochasticComboIndicator.getTradeInsight().toMetadata()
+        self.gridMetadata[LIMetadataKey.tradeInsight] = self.getTradeInsight().toMetadata()
         if self.liquidateByTrailingProfitPercent:
             self.gridMetadata[LIMetadataKey.liquidateByTrailingProfit] = self.liquidateByTrailingProfit
         if self.gridFixedOpenFromPrices or self.gridBandingOpenFromPrices:
             self.gridMetadata[LIMetadataKey.openFromPrices] = self.gridOpenFromPrices
             self.gridMetadata[LIMetadataKey.reachedOpenPrice] = self.reachedOpenPrice
+        if self.flipToSignalType and self.flipToSignalType != LISignalType.NONE:
+            self.gridMetadata[LIMetadataKey.flipToSignalType] = self.flipToSignalType
         self.gridMetadata[LIMetadataKey.pauseTradingTillTime] = self.pauseTradingTillTime.strftime(
             LIGlobal.timestampFormat) if self.pauseTradingTillTime else None
         # Reserve current option contract identifier for restart/reboot/resume
-        if self.positionManager.getContract() and isOption(self.getSymbol().SecurityType):
+        if self.positionManager.getContract() and isOption(self.getSymbol().security_type):
             self.gridMetadata[LIMetadataKey.optionContractCode] = cleanSymbolValue(self.getSymbol())
         elif self.configs.get(LIConfigKey.optionContractCode):
             self.gridMetadata[LIMetadataKey.optionContractCode] = self.configs.get(LIConfigKey.optionContractCode)
@@ -605,7 +908,8 @@ class LIGridBase(LITrading):
         if not postRollover:
             self.sessionId = self.gridMetadata.get(LIMetadataKey.sessionId, 1)
         self.gridStartPrices = self.gridMetadata.get(LIMetadataKey.startPrices, {})
-        self.stoppedLossPrices = self.gridMetadata.get(LIMetadataKey.stoppedLossPrices, 0.0)
+        self.stoppedLossPrices = self.gridMetadata.get(LIMetadataKey.stoppedLossPrices, {})
+        self.stoppedLossPrices = {} if self.stoppedLossPrices == 0.0 else self.stoppedLossPrices
         self.closedTradesCount = self.gridMetadata.get(LIMetadataKey.closedTradesCount, 0)
         self.realizedProfitLoss = self.gridMetadata.get(LIMetadataKey.realizedProfitLoss, 0.0)
         self.rolloverProfitLoss = self.gridMetadata.get(LIMetadataKey.rolloverProfitLoss, 0.0)
@@ -614,18 +918,17 @@ class LIGridBase(LITrading):
             self.dcaMaxStartPrice = self.gridMetadata.get(LIMetadataKey.dcaMaxStartPrice, 0)
             self.dcaHoldingQuantity = self.gridMetadata.get(LIMetadataKey.dcaHoldingQuantity, 0)
             self.dcaLastInvestedDate = self.gridMetadata.get(LIMetadataKey.dcaLastInvestedDate, None)
-            self.dcaLastInvestedDate = datetime.strptime(self.dcaLastInvestedDate, LIGlobal.timestampFormat) if self.dcaLastInvestedDate else getAlgo().Time
+            self.dcaLastInvestedDate = datetime.strptime(self.dcaLastInvestedDate, LIGlobal.timestampFormat) if self.dcaLastInvestedDate else getAlgo().time
         if self.bollingerBandsIndicator:
             self.startBandName = self.gridMetadata.get(LIMetadataKey.startBandName, None)
             self.tradingTierName = self.gridMetadata.get(LIMetadataKey.tradingTierName, None)
             self.bollingerBandsIndicator.resetStartBand(self.startBandName)
-        if self.stochasticComboIndicator:
-            self.stochasticComboIndicator.setTradeInsight(LITradeInsight.fromMetadata(self.gridMetadata.get(LIMetadataKey.tradeInsight, None)))
         if self.liquidateByTrailingProfitPercent:
             self.liquidateByTrailingProfit = self.gridMetadata.get(LIMetadataKey.liquidateByTrailingProfit, 0.0)
         if self.gridFixedOpenFromPrices or self.gridBandingOpenFromPrices:
             self.gridOpenFromPrices = self.gridMetadata.get(LIMetadataKey.openFromPrices, {})
             self.reachedOpenPrice = self.gridMetadata.get(LIMetadataKey.reachedOpenPrice, False)
+        self.flipToSignalType = self.gridMetadata.get(LIMetadataKey.flipToSignalType, None) if self.flipSignalAtLiquidateFactor else None
         self.pauseTradingTillTime = datetime.strptime(self.pauseTradingTillTime, LIGlobal.timestampFormat) if self.pauseTradingTillTime else None
         lot = self.getTradeLot()
         while lot:
@@ -644,7 +947,7 @@ class LIGridBase(LITrading):
         if isLiveMode():  # Avoid auto redeploy (crash/reboot) to reset start prices repeatedly!
             notify(f"{self.getNotifyPrefix()}: Quit algorithm after applied the settings: {settings}, please remove it and redeploy!")
             self.saveMetadataAtEnd = False
-            getAlgo().Quit("Quit algorithm on RESET LOTS METADATA!")
+            getAlgo().quit("Quit algorithm on RESET LOTS METADATA!")
         else:
             notify(f"{self.getNotifyPrefix()}: Applied the settings: {settings}!")
 
@@ -655,6 +958,7 @@ class LIGridBase(LITrading):
             self.gridOpenFromPrices = {}
         if startPrices:
             self.gridStartPrices |= startPrices  # Merge start prices as which could be partial!
+            log(f"{self.getSymbolAlias()}: Merged {startPrices} into the grid start prices as {self.gridStartPrices}.")
         elif not self.gridStartPrices:
             marketPrice = self.getMarketPrice()
             if marketPrice:
@@ -690,14 +994,14 @@ class LIGridBase(LITrading):
 
     def manageDCABuyAndHold(self, bar):
         if not self.isBuyAndHoldMode():
-            return  # Abort
+            return None
 
         if self.gridNoMoreOpenOrders:
             log(f"{self.getSymbolAlias()}: Abort placing open order ticket as {LIConfigKey.gridNoMoreOpenOrders}={self.gridNoMoreOpenOrders}", self.verbose)
-            return False  # Abort, no more open orders!
+            return None  # Abort, no more open orders!
 
-        if not self.positionManager.isExchangeOpen():
-            return  # Abort, wait for market open!
+        if self.positionManager.isNotExchangeOpen():
+            return None
 
         # Check whether it's time to restart the grid session
         startPrice = self.gridStartPrices[self.getGridLongSide()]
@@ -714,41 +1018,33 @@ class LIGridBase(LITrading):
                 self.dcaHoldingQuantity = self.getInvestedQuantity()
                 self.restartGridSession(reason="Getting a higher start price")
         # Check whether it's time to fill a regular investment
-        algoTime = bar.EndTime if bar else getAlgo().Time
+        algoTime = bar.end_time if bar else getAlgo().time
         if isActiveTradingTime(algoTime) and (self.getInvestedQuantity() == 0 or (self.dcaLastInvestedDate + self.getPeriodicityTimedelta()) < algoTime):
             targetQuantity = self.dcaInvestCapital / self.getMarketPrice(bar) if self.dcaInvestCapital else self.dcaInvestQuantity
             targetQuantity = self.positionManager.roundSecuritySize(targetQuantity)
-            tradeOrder = LITradeOrder(quantity=targetQuantity)
-            tradeInsight = LITradeInsight(signalType=LISignalType.LONG, targetPrice=self.getMarketPrice(bar), tradeOrderSet={tradeOrder})
-            if self.positionManager.onEmitTradeInsight(tradeInsight):
+            tagLog = f"Fulfill a DCA regular investment: marketPrice={self.getMarketPrice(bar)}, targetQuantity={targetQuantity}."
+            if self.positionManager.limitMarketOrder(targetQuantity, tagLog=tagLog):
                 self.dcaLastInvestedDate = algoTime
                 # Fulfill a regular investment and continue
                 self.dcaHoldingQuantity = self.getInvestedQuantity() - self.getOpeningQuantity()
                 self.storeGridMetadata(logging=True)
                 dcaInvestMsg = f"dcaInvestCapital={self.dcaInvestCapital}" if self.dcaInvestCapital else f"dcaInvestQuantity={self.dcaInvestQuantity}"
-                notify(f"{self.getNotifyPrefix()}: Fulfilled a regular investment: "
-                       f"marketPrice={self.getMarketPrice(bar)}, targetQuantity={targetQuantity}, openingQuantity={self.getOpeningQuantity()}, "
+                notify(f"{self.getNotifyPrefix()}: {tagLog}, openingQuantity={self.getOpeningQuantity()}, "
                        f"{dcaInvestMsg}, dcaLastInvestedDate={printFullTime(self.dcaLastInvestedDate)}, "
                        f"dcaHoldingQuantity={self.dcaHoldingQuantity}")
-                # Fulfill a regular investment and restart session
-                # self.dcaHoldingQuantity = self.getInvestedQuantity()
-                # dcaInvestMsg = f"dcaInvestCapital={self.dcaInvestCapital}" if self.dcaInvestCapital else f"dcaInvestQuantity={self.dcaInvestQuantity}"
-                # notify(f"{self.getNotifyPrefix()}: Fulfilled a regular investment: "
-                #        f"marketPrice={self.getMarketPrice(bar)}, targetQuantity={targetQuantity}, openingQuantity={self.getOpeningQuantity()}, "
-                #        f"{dcaInvestMsg}, dcaLastInvestedDate={printFullTime(self.dcaLastInvestedDate)}, "
-                #        f"dcaHoldingQuantity={self.dcaHoldingQuantity}. And restart grid session.")
-                # self.restartGridSession()
+        return None
 
     def monitorTradingRisk(self):
         # self.manageGridLiquidation()
         if self.riskProposeHedgeInsights:
             if self.tradeSecurityType == SecurityType.FUTURE:
-                tradeSymbol = self.getTradeSecurity().Symbol
+                tradeSymbol = self.getTradeSecurity().symbol
                 if self.securityMonitor.isContractExpired(expiryDays=self.riskHedgeOptionExpiryDays):
-                    futures = getAlgo().FutureChainProvider.GetFutureContractList(tradeSymbol.Canonical, getAlgo().Time)
-                    tradeSymbol = sorted([x for x in futures if isExpiredAfterDays(x.ID.Date, self.riskHedgeOptionExpiryDays)], key=lambda x: x.ID.Date)[0]
+                    futures = getAlgo().futures_chain(tradeSymbol.canonical)
+                    tradeSymbol = sorted([x for x in futures if isExpiredAfterDays(x.id.date, self.riskHedgeOptionExpiryDays)], key=lambda x: x.id.date)[
+                        0].symbol
                     log(f"{self.getSymbolAlias()}: Picked the hedge future contract {cleanSymbolValue(tradeSymbol)} expired after {self.riskHedgeOptionExpiryDays} days")
-                options = getAlgo().OptionChainProvider.GetOptionContractList(tradeSymbol, getAlgo().Time)
+                options = getAlgo().option_chain(tradeSymbol)
                 if options and self.isContrarianMode():
                     optionSymbols = []
                     if self.gridLongLots:
@@ -758,8 +1054,8 @@ class LIGridBase(LITrading):
                         stopLossPrice = self.positionManager.roundSecurityPrice(stopLossPrice / 2)
                         optionSymbols += sorted(
                             [x for x in options if
-                             x.ID.OptionStyle == OptionStyle.American and x.ID.OptionRight == OptionRight.Put and x.ID.StrikePrice <= stopLossPrice],
-                            key=lambda x: x.ID.StrikePrice, reverse=True)[0:5]
+                             x.id.option_style == OptionStyle.AMERICAN and x.id.option_right == OptionRight.PUT and x.id.strike_price <= stopLossPrice],
+                            key=lambda x: x.id.strike_price, reverse=True)[0:5]
                     if self.gridShortLots:
                         # Take the middle of stop loss price as the init strike price
                         stopLossPrice = self.getFirstShortLot().getStopLossPrice()[0]
@@ -767,13 +1063,13 @@ class LIGridBase(LITrading):
                         stopLossPrice = self.positionManager.roundSecurityPrice(stopLossPrice / 2)
                         optionSymbols += sorted(
                             [x for x in options if
-                             x.ID.OptionStyle == OptionStyle.American and x.ID.OptionRight == OptionRight.Call and x.ID.StrikePrice >= stopLossPrice],
-                            key=lambda x: x.ID.StrikePrice, reverse=False)[0:5]
+                             x.id.option_style == OptionStyle.AMERICAN and x.id.option_right == OptionRight.CALL and x.id.strike_price >= stopLossPrice],
+                            key=lambda x: x.id.strike_price, reverse=False)[0:5]
                     optionContracts = []
                     for optionSymbol in optionSymbols:
                         optionContracts.append(self.securityMonitor.addFutureOptionContract(optionSymbol))
                         # Warm up the open interest cache data
-                        history = getAlgo().History[TradeBar](optionSymbol, 10, resolution=Resolution.Daily)
+                        history = getAlgo().history[TradeBar](optionSymbol, 10, resolution=Resolution.DAILY)
                         if len(history.index) == 0 or 0 in history.values:
                             alert(f"{self.getNotifyPrefix()}: Open interest history request got empty values!")
                         if optionContracts:

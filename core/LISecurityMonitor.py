@@ -1,42 +1,70 @@
-# region imports
+from AlgorithmImports import *
 from core.LIConfiguration import *
 
 
-# endregion
-
 def printSecurities(securities):
-    return f"{list(map(lambda x: (cleanSymbolValue(x.Symbol) + '|' + (x.Expiry.strftime(LIGlobal.fullDateFormat) if isDerivative(x.Type) and x.Expiry else 'None') + '|' + str(x.Volume)), securities))}"
+    return f"{list(map(lambda x: (cleanSymbolValue(x.symbol) + '|' + (x.expiry.strftime(LIGlobal.dateFormat) if isDerivative(x.type) and x.expiry else 'None') + '|' + str(x.volume)), securities))}"
 
 
 def printOptionSymbol(symbol: Symbol):
     identifier = symbol.ID
-    result = f"{cleanSymbolValue(symbol)}\t{getEnumName(identifier.OptionRight, OptionRight)}\t{identifier.StrikePrice}\t{identifier.Date.strftime(LIGlobal.fullDateFormat)}"
+    result = f"{cleanSymbolValue(symbol)}\t{str(identifier.option_right)}\t{identifier.strike_price}\t{identifier.date.strftime(LIGlobal.dateFormat)}"
     return result
 
 
 def printOptionContract(option: Option):
-    result = (f"symbol={cleanSymbolValue(option.Symbol)}, right={getEnumName(option.Right, OptionRight)}, strike={option.StrikePrice}, "
-              f"expiry={option.Expiry.strftime(LIGlobal.fullDateFormat)}, price={option.Price}, multiplier={option.ContractMultiplier}, "
-              f"openInterest={option.OpenInterest}, volume={option.Volume}, bidSize={option.BidSize}, bidPrice={option.BidPrice}, "
-              f"askSize={option.AskSize}, askPrice={option.AskPrice}")
+    result = (f"symbol={cleanSymbolValue(option.symbol)}, right={str(option.right)}, strike={option.strike_price}, "
+              f"expiry={option.expiry.strftime(LIGlobal.dateFormat)}, price={option.price}, multiplier={option.contract_multiplier}, "
+              f"openInterest={option.open_interest}, volume={option.volume}, bidSize={option.bid_size}, bidPrice={option.bid_price}, "
+              f"askSize={option.ask_size}, askPrice={option.ask_price}")
     return result
 
 
 def isExpiredAfterDays(expiryDate, expiryDays):
     backwardDate = roundDownTime(expiryDate - timedelta(days=expiryDays), delta=timedelta(days=1))
-    currentDate = roundDownTime(getAlgo().Time, delta=timedelta(days=1))
+    currentDate = roundDownTime(getAlgo().time, delta=timedelta(days=1))
     return backwardDate >= currentDate
 
 
 def getResolution(resolution: LIResolution) -> Resolution:
     if resolution == LIResolution.SECOND:
-        return Resolution.Second
+        return Resolution.SECOND
     elif resolution == LIResolution.MINUTE:
-        return Resolution.Minute
+        return Resolution.MINUTE
     elif resolution == LIResolution.HOUR:
-        return Resolution.Hour
+        return Resolution.HOUR
     elif resolution == LIResolution.DAY:
-        return Resolution.Daily
+        return Resolution.DAILY
+    else:
+        terminate(f"Not support {LIConfigKey.resolution}={resolution}")
+        return None
+
+
+def getResolutionTimedelta(resolution: LIResolution) -> timedelta:
+    if resolution == LIResolution.SECOND:
+        return timedelta(seconds=1)
+    elif resolution == LIResolution.MINUTE:
+        return timedelta(minutes=1)
+    elif resolution == LIResolution.HOUR:
+        return timedelta(hours=1)
+    elif resolution == LIResolution.DAY:
+        return timedelta(days=1)
+    else:
+        terminate(f"Not support {LIConfigKey.resolution}={resolution}")
+        return None
+
+
+def getDefaultWarmupPeriods(resolution: LIResolution) -> int:
+    warmupPeriods = 0
+    if resolution == LIResolution.SECOND:
+        warmupPeriods = 1 * 60  # 1 minute history data, not applicable for marketOpenPrice/marketClosePrice!
+    elif resolution == LIResolution.MINUTE:
+        warmupPeriods = 1 * 60  # 1 hour history data
+    elif resolution == LIResolution.HOUR:
+        warmupPeriods = 1 * 24  # 1 day history data
+    elif resolution == LIResolution.DAY:
+        warmupPeriods = 1 * 30  # 1 month history data
+    return warmupPeriods
 
 
 class LISecurityMonitor:
@@ -46,25 +74,27 @@ class LISecurityMonitor:
         self.strategyCode = strategyCode
         self.configs = configs
 
-        self.aliasName = configs.get(LIConfigKey.aliasName, LIDefault.aliasName)
         self.verbose = configs.get(LIConfigKey.verbose, LIDefault.verbose)
+        self.aliasName = configs.get(LIConfigKey.aliasName, LIDefault.aliasName)
+        self.warmupAlgo = configs.get(LIConfigKey.warmupAlgo, LIDefault.warmupAlgo)
 
-        self.resolution = configs.get(LIConfigKey.resolution, LIDefault.resolution)
         self.monitorPeriod = configs.get(LIConfigKey.monitorPeriod, LIDefault.monitorPeriod)
-        self.benchmarkSymbolStr = configs.get(LIConfigKey.benchmarkSymbolStr, LIDefault.benchmarkSymbolStr)
-        self.enableAutoRollover = configs.get(LIConfigKey.enableAutoRollover, LIDefault.enableAutoRollover)
         self.forceExchangeOpen = configs.get(LIConfigKey.forceExchangeOpen, LIDefault.forceExchangeOpen)
+        self.enableAutoRollover = configs.get(LIConfigKey.enableAutoRollover, LIDefault.enableAutoRollover)
         self.extendedMarketHours = configs.get(LIConfigKey.extendedMarketHours, LIDefault.extendedMarketHours)
         self.extendDataBarStream = configs.get(LIConfigKey.extendDataBarStream, LIDefault.extendDataBarStream)
         self.fetchHistoryBarData = configs.get(LIConfigKey.fetchHistoryBarData, LIDefault.fetchHistoryBarData)
         self.disableBuyingPowerModel = configs.get(LIConfigKey.disableBuyingPowerModel, LIDefault.disableBuyingPowerModel)
         self.dayOpenGapUpDownPercent = configs.get(LIConfigKey.dayOpenGapUpDownPercent, LIDefault.dayOpenGapUpDownPercent)
 
-        self.futureQuarterly = configs.get(LIConfigKey.futureQuarterly, LIDefault.futureQuarterly)
+        self.liquidateLossAndBackfillEquity = configs.get(LIConfigKey.liquidateLossAndBackfillEquity, LIDefault.liquidateLossAndBackfillEquity)
+
         self.futurePeriodDays = configs.get(LIConfigKey.futurePeriodDays, LIDefault.futurePeriodDays)
         self.futureRolloverDays = configs.get(LIConfigKey.futureRolloverDays, LIDefault.futureRolloverDays)
         self.futureContractCode = configs.get(LIConfigKey.futureContractCode, LIDefault.futureContractCode)
         self.futureContractExpiry = configs.get(LIConfigKey.futureContractExpiry, LIDefault.futureContractExpiry)
+        self.futureContractMarket = configs.get(LIConfigKey.futureContractMarket, LIDefault.futureContractMarket)
+        self.futureExpirationCycles = configs.get(LIConfigKey.futureExpirationCycles, LIDefault.futureExpirationCycles)
 
         self.optionRight = configs.get(LIConfigKey.optionRight, LIDefault.optionRight)
         self.optionContractCode = configs.get(LIConfigKey.optionContractCode, LIDefault.optionContractCode)
@@ -74,7 +104,7 @@ class LISecurityMonitor:
         self.addFutureOptionUniverse = configs.get(LIConfigKey.addFutureOptionUniverse, LIDefault.addFutureOptionUniverse)
 
         if self.securityType == SecurityType.OPTION and self.optionRight is None:
-            terminate(f"Please specify {LIConfigKey.optionRight} as securityType={getEnumName(self.securityType, SecurityType)}!")
+            terminate(f"Please specify {LIConfigKey.optionRight} as securityType={str(self.securityType)}!")
         if self.futureRolloverDays < 1:
             terminate(f"Please specify '{LIConfigKey.futureRolloverDays} > 0' to avoid 'Liquidate from delisting' unexpectedly!")
         if self.futureContractCode and self.futureContractExpiry:
@@ -84,6 +114,7 @@ class LISecurityMonitor:
         self.contract: Security = None
         self.nextSecurity: Security = None
         self.expiredSecurity: Security = None
+        self.backfillSecurity: Security = None
 
         self.latestDataBar = None
         self.marketOpenPrice = -1  # Could be last/previous day or today open price, upon current time
@@ -110,14 +141,18 @@ class LISecurityMonitor:
         # To be called in onSecuritiesChanged()
         # self.resetSecurityMonitor()  # Warm up with some history data
 
+        # Have securities initialized right after deployment
+        if self.warmupAlgo and not getAlgo().is_warming_up:
+            getAlgo().set_warmup(10, self.getResolution())
+
         # Simulate market data stream if not available yet!
         if self.extendDataBarStream:
-            getAlgo().Schedule.On(getAlgo().DateRules.EveryDay(),
-                                  getAlgo().TimeRules.Every(self.getResolutionTimedelta()),
+            getAlgo().schedule.on(getAlgo().date_rules.every_day(),
+                                  getAlgo().time_rules.every(getResolutionTimedelta(self.monitorPeriod[1])),
                                   self.updateDataConsolidator)
 
     def getSymbol(self) -> Symbol:
-        return self.getSecurity().Symbol
+        return self.getSecurity().symbol
 
     def getSecurity(self) -> Security:
         """Final resolved security or contract for derivative!"""
@@ -142,7 +177,7 @@ class LISecurityMonitor:
         return self.tradingDays
 
     def getResolution(self) -> Resolution:
-        return getResolution(self.resolution)
+        return getResolution(self.monitorPeriod[1])
 
     def atMarketOpeningTime(self, timestamp=None) -> bool:
         return atMarketOpeningTime(timestamp=timestamp, delta=self.getMonitorPeriodDelta())
@@ -150,23 +185,11 @@ class LISecurityMonitor:
     def atMarketClosingTime(self, timestamp=None) -> bool:
         return atMarketClosingTime(timestamp=timestamp, delta=self.getMonitorPeriodDelta())
 
-    def getResolutionTimedelta(self) -> timedelta:
-        if self.resolution == LIResolution.SECOND:
-            return timedelta(seconds=1)
-        elif self.resolution == LIResolution.MINUTE:
-            return timedelta(minutes=1)
-        elif self.resolution == LIResolution.HOUR:
-            return timedelta(hours=1)
-        elif self.resolution == LIResolution.DAY:
-            return timedelta(days=1)
-        else:
-            terminate(f"Not support {LIConfigKey.resolution}={self.resolution}")
-
     def getMonitorPeriodDelta(self) -> timedelta:
-        return self.getResolutionTimedelta() * self.monitorPeriod
+        return getResolutionTimedelta(self.monitorPeriod[1]) * self.monitorPeriod[0]
 
     def getSecurityMultiplier(self):
-        return self.getSecurity().SymbolProperties.ContractMultiplier  # 1.0 for other securities
+        return self.getSecurity().symbol_properties.contract_multiplier  # 1.0 for other securities
 
     def getSecurityType(self):
         return self.securityType
@@ -176,88 +199,88 @@ class LISecurityMonitor:
 
     def getCanonicalSymbol(self) -> Symbol:
         symbol = self.getSymbol()
-        if isDerivative(symbol.SecurityType):
-            return symbol.Canonical
+        if isDerivative(symbol.security_type):
+            return symbol.canonical
         return symbol
 
     def setupSecurityUniverse(self):
-        if self.benchmarkSymbolStr:
-            benchmark = getAlgo().AddEquity(self.benchmarkSymbolStr)
-            getAlgo().SetBenchmark(benchmark.Symbol)
-
         if self.securityType == SecurityType.EQUITY:
-            self.security = getAlgo().AddEquity(ticker=self.symbolStr,
-                                                resolution=self.getResolution(),
-                                                extendedMarketHours=self.extendedMarketHours,
-                                                dataNormalizationMode=DataNormalizationMode.Raw)  # DO NOT normalize history data!
+            self.security = getAlgo().add_equity(ticker=self.symbolStr,
+                                                 resolution=self.getResolution(),
+                                                 extended_market_hours=self.extendedMarketHours,
+                                                 data_normalization_mode=DataNormalizationMode.RAW)  # DO NOT normalize history data!
         elif self.securityType == SecurityType.FOREX:
-            self.security = getAlgo().AddForex(ticker=self.symbolStr,
-                                               resolution=self.getResolution())
-        elif self.securityType == SecurityType.Cfd:
-            self.security = getAlgo().AddCfd(ticker=self.symbolStr,
-                                             resolution=self.getResolution())
+            self.security = getAlgo().add_forex(ticker=self.symbolStr,
+                                                resolution=self.getResolution())
+        elif self.securityType == SecurityType.CFD:
+            self.security = getAlgo().add_cfd(ticker=self.symbolStr,
+                                              resolution=self.getResolution())
         elif self.securityType == SecurityType.FUTURE:
-            self.security = getAlgo().AddFuture(ticker=self.symbolStr,
-                                                resolution=self.getResolution(),
-                                                extendedMarketHours=self.extendedMarketHours,
-                                                dataMappingMode=DataMappingMode.LastTradingDay,
-                                                dataNormalizationMode=DataNormalizationMode.Raw,  # DO NOT normalize history data!
-                                                contractDepthOffset=0)
+            self.security = getAlgo().add_future(ticker=self.symbolStr,
+                                                 resolution=self.getResolution(),
+                                                 extended_market_hours=self.extendedMarketHours,
+                                                 data_mapping_mode=DataMappingMode.LAST_TRADING_DAY,
+                                                 data_normalization_mode=DataNormalizationMode.RAW,  # DO NOT normalize history data!
+                                                 contract_depth_offset=0)
             if self.futureContractExpiry:
-                self.contract = getAlgo().AddFutureContract(Symbol.CreateFuture(self.symbolStr, Market.CME, self.futureContractExpiry),
-                                                            resolution=self.getResolution(),
-                                                            extendedMarketHours=self.extendedMarketHours)
-                self.security.SetFilter(minExpiryDays=0, maxExpiryDays=0)  # No filter as just use the specified contract
+                self.contract = getAlgo().add_future_contract(Symbol.create_future(self.symbolStr, self.futureContractMarket, self.futureContractExpiry),
+                                                              resolution=self.getResolution(),
+                                                              extended_market_hours=self.extendedMarketHours)
+                self.security.set_filter(timedelta(days=0), timedelta(days=0))  # No filter as just use the specified contract
             elif self.futureContractCode:
-                self.contract = getAlgo().AddFutureContract(SymbolRepresentation.ParseFutureSymbol(self.futureContractCode),
-                                                            resolution=self.getResolution(),
-                                                            extendedMarketHours=self.extendedMarketHours)
-                self.security.SetFilter(minExpiryDays=0, maxExpiryDays=0)  # No filter as just use the specified contract
+                self.contract = getAlgo().add_future_contract(SymbolRepresentation.parse_future_symbol(self.futureContractCode),
+                                                              resolution=self.getResolution(),
+                                                              extended_market_hours=self.extendedMarketHours)
+                self.security.set_filter(timedelta(days=0), timedelta(days=0))  # No filter as just use the specified contract
             else:
                 # Set expiry filter and accept contracts between these days
-                expirationCycle = FutureExpirationCycles.AllYear
-                if self.futureQuarterly is not None:
-                    if self.futureQuarterly:
-                        expirationCycle = FutureExpirationCycles.March
+                expirationCycle = FutureExpirationCycles.ALL_YEAR
+                if self.futureExpirationCycles is not None:
+                    expirationCycle = self.futureExpirationCycles
                 elif self.futurePeriodDays > 85:
-                    expirationCycle = FutureExpirationCycles.March
-                self.security.SetFilter(lambda futureFilter: futureFilter.Expiration(minExpiryDays=0,
-                                                                                     maxExpiryDays=self.getFutureMaxExpiryDays()).
-                                        ExpirationCycle(expirationCycle))
-            # self.security.SetFillModel(LatestPriceFillModel())
-            # getQcAlgo().SetSecurityInitializer(lambda security: security.SetMarginModel(SecurityMarginModel.Null))
+                    expirationCycle = FutureExpirationCycles.MARCH
+                self.security.set_filter(
+                    lambda f: f.expiration_cycle(expirationCycle).expiration(timedelta(days=0), timedelta(days=self.getFutureMaxExpiryDays())))
+            # self.security.set_fill_model(LatestPriceFillModel())
+            # getQcAlgo().set_security_initializer(lambda security: security.set_margin_model(SecurityMarginModel.NULL))
             if self.addFutureOptionUniverse:
-                getAlgo().AddFutureOption(self.security.Symbol, lambda universe: universe
-                                          .StandardsOnly()
-                                          .Strikes(self.optionMinMaxStrikeLevel[0], self.optionMinMaxStrikeLevel[1])
-                                          .Expiration(self.optionMinMaxExpiryDays[0], self.optionMinMaxExpiryDays[1])
-                                          .OnlyApplyFilterAtMarketOpen())
+                getAlgo().add_future_option(self.security.symbol, lambda universe: universe
+                                            .standards_only()
+                                            .strikes(self.optionMinMaxStrikeLevel[0], self.optionMinMaxStrikeLevel[1])
+                                            .expiration(timedelta(days=self.optionMinMaxExpiryDays[0]), timedelta(days=self.optionMinMaxExpiryDays[1]))
+                                            .only_apply_filter_at_market_open())
         elif self.securityType == SecurityType.OPTION:
-            # underlyingEquity = getQcAlgo().AddEquity(self.symbolStr, resolution=self.getResolution())
-            self.security = getAlgo().AddOption(underlying=self.symbolStr,
-                                                resolution=self.getResolution())
+            # underlyingEquity = getQcAlgo().add_equity(self.symbolStr, resolution=self.getResolution())
+            self.security = getAlgo().add_option(underlying=self.symbolStr,
+                                                 resolution=self.getResolution())
             # The filter will be shared by both put and call
             if self.optionContractCode:
-                spanDays = (extractExpiryDate(self.optionContractCode) - getAlgo().Time).days
+                spanDays = (extractExpiryDate(self.optionContractCode) - getAlgo().time).days
                 strikePrice = extractStrikePrice(self.optionContractCode)
                 log(f"{self.getSymbolStrAlias()}: Use reserved option contract {self.optionContractCode}, spanDays={spanDays}, strikePrice={strikePrice}.")
-                self.security.SetFilter(lambda universe: universe
-                                        .StandardsOnly()
-                                        .Strikes(self.optionMinMaxStrikeLevel[0], self.optionMinMaxStrikeLevel[1])
-                                        .Expiration(spanDays - 5, spanDays + 5)
-                                        .OnlyApplyFilterAtMarketOpen())
+                self.security.set_filter(lambda universe: universe
+                                         .standards_only()
+                                         .strikes(self.optionMinMaxStrikeLevel[0], self.optionMinMaxStrikeLevel[1])
+                                         .expiration(timedelta(days=spanDays - 5), timedelta(days=spanDays + 5))
+                                         .only_apply_filter_at_market_open())
             else:
-                self.security.SetFilter(lambda universe: universe
-                                        .StandardsOnly()
-                                        .Strikes(self.optionMinMaxStrikeLevel[0], self.optionMinMaxStrikeLevel[1])
-                                        .Expiration(self.optionMinMaxExpiryDays[0], self.optionMinMaxExpiryDays[1])
-                                        .OnlyApplyFilterAtMarketOpen())
-        elif self.securityType == SecurityType.CryptoFuture:
-            self.security = getAlgo().AddCryptoFuture(ticker=self.symbolStr, resolution=self.getResolution())
+                self.security.set_filter(lambda universe: universe
+                                         .standards_only()
+                                         .strikes(self.optionMinMaxStrikeLevel[0], self.optionMinMaxStrikeLevel[1])
+                                         .expiration(timedelta(days=self.optionMinMaxExpiryDays[0]), timedelta(days=self.optionMinMaxExpiryDays[1]))
+                                         .only_apply_filter_at_market_open())
+        elif self.securityType == SecurityType.CRYPTO_FUTURE:
+            self.security = getAlgo().add_crypto_future(ticker=self.symbolStr, resolution=self.getResolution())
             # Set expiry filter and accept contracts between these days
-            self.security.SetFilter(minExpiryDays=0, maxExpiryDays=self.futurePeriodDays + self.futureRolloverDays)
+            self.security.set_filter(timedelta(days=0), timedelta(days=self.futurePeriodDays + self.futureRolloverDays))
         else:
-            terminate(f"Invalid securityType={getEnumName(self.securityType, SecurityType)}")
+            terminate(f"Invalid securityType={str(self.securityType)}")
+        # Add other ancillary securities if specified
+        if self.liquidateLossAndBackfillEquity:
+            self.backfillSecurity = getAlgo().add_equity(ticker=self.liquidateLossAndBackfillEquity,
+                                                         resolution=self.getResolution(),
+                                                         extended_market_hours=self.extendedMarketHours,
+                                                         data_normalization_mode=DataNormalizationMode.RAW)  # DO NOT normalize history data!
 
     def getFutureMaxExpiryDays(self):
         if self.futureContractCode or self.futureContractExpiry:
@@ -266,56 +289,64 @@ class LISecurityMonitor:
             return self.futurePeriodDays + self.futureRolloverDays
 
     def resetConsolidator(self, security):
-        if self.consolidators.get(security.Symbol) is not None:
-            consolidator = self.consolidators.pop(security.Symbol)
-            consolidator.DataConsolidated -= self.onDataConsolidated
-            getAlgo().SubscriptionManager.RemoveConsolidator(security.Symbol, consolidator)
-            log(f"Removed consolidator of the security: {security.Symbol.Value}")
+        if self.consolidators.get(security.symbol) is not None:
+            consolidator = self.consolidators.pop(security.symbol)
+            consolidator.data_consolidated -= self.onDataConsolidated
+            getAlgo().subscription_manager.remove_consolidator(security.symbol, consolidator)
+            log(f"Removed consolidator of the security: {security.symbol.value}")
         consolidator = self.getConsolidator(self.monitorPeriod)
-        consolidator.DataConsolidated += self.onDataConsolidated
-        getAlgo().SubscriptionManager.AddConsolidator(security.Symbol, consolidator)
-        self.consolidators[security.Symbol] = consolidator
+        consolidator.only_emit_on_close = True
+        consolidator.time_zone = LIGlobal.timezone
+        consolidator.data_consolidated += self.onDataConsolidated
+        getAlgo().subscription_manager.add_consolidator(security.symbol, consolidator)
+        self.consolidators[security.symbol] = consolidator
 
     def initSecurityMonitor(self, totalPeriods=0):
         if not self.fetchHistoryBarData and totalPeriods == 0:
             log(f"{self.getSymbolAlias()}: Skipped resetting security monitor as {LIConfigKey.fetchHistoryBarData}={self.fetchHistoryBarData}")
             return  # Abort on demand
 
-        totalPeriods = 0
+        resolution = self.monitorPeriod[1]
         if totalPeriods == 0:  # Use default periods
-            if self.resolution == LIResolution.SECOND:
-                totalPeriods = 1 * 60  # 1 minute history data, not applicable for marketOpenPrice/marketClosePrice!
-            elif self.resolution == LIResolution.MINUTE:
-                totalPeriods = 1 * 60  # 1 hour history data
-            elif self.resolution == LIResolution.HOUR:
-                totalPeriods = 1 * 24  # 1 day history data
-            elif self.resolution == LIResolution.DAY:
-                totalPeriods = 1 * 30  # 1 month history data
+            totalPeriods = getDefaultWarmupPeriods(resolution)
 
         for bar in self.getHistoryBars(totalPeriods):
-            if bar and bar.Close:
+            if bar and bar.close:
                 self.latestDataBar = bar
-                if self.atMarketOpeningTime(timestamp=bar.EndTime):
-                    self.marketOpenPrice = bar.Close
-                if self.atMarketClosingTime(timestamp=bar.EndTime):
-                    self.marketClosePrice = bar.Close
+                if self.atMarketOpeningTime(timestamp=bar.end_time):
+                    self.marketOpenPrice = bar.close
+                if self.atMarketClosingTime(timestamp=bar.end_time):
+                    self.marketClosePrice = bar.close
 
         log(f"{self.getSymbolAlias()}: Reset security monitor, marketOpenPrice={self.marketOpenPrice:.2f}, "
-            f"marketClosePrice={self.marketClosePrice:.2f}, latestDataBar={self.latestDataBar.Close if self.latestDataBar else -1:.2f}")
+            f"marketClosePrice={self.marketClosePrice:.2f}, latestDataBar={self.latestDataBar.close if self.latestDataBar else -1:.2f}")
 
-    def getHistoryBars(self, totalPeriods):
-        barType = QuoteBar if useQuoteBar(self.securityType) else TradeBar
-        bars = getAlgo().History[barType](self.getSymbol(), totalPeriods, self.getResolution())
+    def getHistoryBars(self, periods, resolution=None):
+        bars = getAlgo().history[getBarType(self.getSecurityType())](self.getSymbol(), periods,
+                                                                     resolution=resolution if resolution else self.getResolution(),
+                                                                     extended_market_hours=self.extendedMarketHours,
+                                                                     data_mapping_mode=DataMappingMode.LAST_TRADING_DAY,
+                                                                     data_normalization_mode=DataNormalizationMode.RAW,  # DO NOT normalize history data!
+                                                                     contract_depth_offset=0)
         return bars
+
+    def getHistoryDataFrame(self, periods, resolution=None):
+        dataFrame = getAlgo().history(getBarType(self.getSecurityType()), self.getSymbol(), periods,
+                                      resolution=resolution if resolution else self.getResolution(),
+                                      extended_market_hours=self.extendedMarketHours,
+                                      data_mapping_mode=DataMappingMode.LAST_TRADING_DAY,
+                                      data_normalization_mode=DataNormalizationMode.RAW,  # DO NOT normalize history data!
+                                      contract_depth_offset=0)
+        return dataFrame
 
     def addSecurity(self, security: Security):
         if security is None:
             return  # Ignore possible null symbol
 
-        # self.security.SetFillModel(LatestPriceFillModel())
+        # self.security.set_fill_model(LatestPriceFillModel())
         if self.disableBuyingPowerModel:
-            security.SetMarginModel(SecurityMarginModel.Null)
-            # security.SetBuyingPowerModel(BuyingPowerModel.Null)
+            security.set_margin_model(SecurityMarginModel.NULL)
+            # security.set_buying_power_model(BuyingPowerModel.NULL)
 
         self.resetConsolidator(security)
         self.initSecurityMonitor()
@@ -326,44 +357,44 @@ class LISecurityMonitor:
     def getConsolidator(self, period):
         consolidator = None
         if useQuoteBar(self.securityType):
-            if self.resolution == LIResolution.SECOND:
-                consolidator = QuoteBarConsolidator(timedelta(seconds=period))
-            elif self.resolution == LIResolution.MINUTE:
-                consolidator = QuoteBarConsolidator(timedelta(minutes=period))
-            elif self.resolution == LIResolution.HOUR:
-                consolidator = QuoteBarConsolidator(timedelta(hours=period))
-            elif self.resolution == LIResolution.DAY:
-                consolidator = QuoteBarConsolidator(timedelta(days=period))
+            if period[1] == LIResolution.SECOND:
+                consolidator = QuoteBarConsolidator(timedelta(seconds=period[0]))
+            elif period[1] == LIResolution.MINUTE:
+                consolidator = QuoteBarConsolidator(timedelta(minutes=period[0]))
+            elif period[1] == LIResolution.HOUR:
+                consolidator = QuoteBarConsolidator(timedelta(hours=period[0]))
+            elif period[1] == LIResolution.DAY:
+                consolidator = QuoteBarConsolidator(timedelta(days=period[0]))
         else:
-            if self.resolution == LIResolution.SECOND:
-                consolidator = TradeBarConsolidator(timedelta(seconds=period))
-            elif self.resolution == LIResolution.MINUTE:
-                consolidator = TradeBarConsolidator(timedelta(minutes=period))
-            elif self.resolution == LIResolution.HOUR:
-                consolidator = TradeBarConsolidator(timedelta(hours=period))
-            elif self.resolution == LIResolution.DAY:
-                consolidator = TradeBarConsolidator(timedelta(days=period))
+            if period[1] == LIResolution.SECOND:
+                consolidator = TradeBarConsolidator(timedelta(seconds=period[0]))
+            elif period[1] == LIResolution.MINUTE:
+                consolidator = TradeBarConsolidator(timedelta(minutes=period[0]))
+            elif period[1] == LIResolution.HOUR:
+                consolidator = TradeBarConsolidator(timedelta(hours=period[0]))
+            elif period[1] == LIResolution.DAY:
+                consolidator = TradeBarConsolidator(timedelta(days=period[0]))
         return consolidator
 
     def removeSecurity(self, security: Security):
         if security is None:
             return  # Ignore possible null symbol
-        if self.consolidators.get(security.Symbol) is not None:
-            consolidator = self.consolidators.pop(security.Symbol)
-            consolidator.DataConsolidated -= self.onDataConsolidated
-            getAlgo().SubscriptionManager.RemoveConsolidator(security.Symbol, consolidator)
-            log(f"Removed consolidator of the security: {security.Symbol.Value}")
+        if self.consolidators.get(security.symbol) is not None:
+            consolidator = self.consolidators.pop(security.symbol)
+            consolidator.data_consolidated -= self.onDataConsolidated
+            getAlgo().subscription_manager.remove_consolidator(security.symbol, consolidator)
+            log(f"Removed consolidator of the security: {security.symbol.value}")
         for (priority, listener) in self.securityChangedListeners:
             listener.onSecurityChanged(removedSecurity=security)
 
     def isOption(self) -> bool:
-        return isOption(self.getSymbol().SecurityType if self.getSymbol() else self.securityType)
+        return isOption(self.getSymbol().security_type if self.getSymbol() else self.securityType)
 
     def isDerivative(self) -> bool:
-        return isDerivative(self.getSymbol().SecurityType if self.getSymbol() else self.securityType)
+        return isDerivative(self.getSymbol().security_type if self.getSymbol() else self.securityType)
 
     def addFutureOptionContract(self, symbol: Symbol) -> Option:
-        return getAlgo().AddFutureOptionContract(symbol, resolution=self.getResolution())
+        return getAlgo().add_future_option_contract(symbol, resolution=self.getResolution())
 
     def subscribeSecurityChanged(self, listener, priority):
         if listener in self.securityChangedListeners:
@@ -417,21 +448,21 @@ class LISecurityMonitor:
 
     def isContractExpired(self, expiryDays=None):
         if self.contract:
-            contractExpiry = roundDownTime(self.contract.Expiry, delta=timedelta(days=1))
-            rolloverDate = roundDownTime(self.contract.Expiry - timedelta(days=(expiryDays if expiryDays else self.futureRolloverDays)),
+            contractExpiry = roundDownTime(self.contract.expiry, delta=timedelta(days=1))
+            rolloverDate = roundDownTime(self.contract.expiry - timedelta(days=(expiryDays if expiryDays else self.futureRolloverDays)),
                                          delta=timedelta(days=1))
-            currentDate = roundDownTime(getAlgo().Time, delta=timedelta(days=1))
+            currentDate = roundDownTime(getAlgo().time, delta=timedelta(days=1))
             log(f"{self.getSymbolAlias()}: contractExpiry={contractExpiry}, rolloverDate={rolloverDate}, currentDate={currentDate}.", self.verbose)
             return rolloverDate <= currentDate
+        return None
 
     def isExchangeOpen(self):
         # if self.forceExchangeOpen:
         #     log(f"Always return true as {LIConfigKey.forceExchangeOpen}={self.forceExchangeOpen}")
-        return self.isTempTradable or \
-            self.forceExchangeOpen or \
-            self.getSecurity().Exchange.ExchangeOpen or \
-            getAlgo().IsMarketOpen(self.getSecurity().Symbol) or \
-            getAlgo().Securities[self.getSymbol()].Exchange.Hours.IsOpen(getAlgo().Time, self.extendedMarketHours)
+        return (not getAlgo().is_warming_up and
+                (self.isTempTradable or self.forceExchangeOpen or self.getSecurity().exchange.exchange_open or
+                 getAlgo().is_market_open(self.getSecurity().symbol) or
+                 getAlgo().securities[self.getSymbol()].exchange.hours.is_open(getAlgo().time, self.extendedMarketHours)))
 
     def enableTempTradable(self):
         self.isTempTradable = True
@@ -441,12 +472,12 @@ class LISecurityMonitor:
 
     def getMarketPrice(self):
         # In favor of limit market order to be filled after retry
-        marketPrice = getAlgo().Securities[self.getSymbol()].Price
+        marketPrice = getAlgo().securities[self.getSymbol()].price
         if not marketPrice and self.latestDataBar:
-            marketPrice = self.latestDataBar.Close
+            marketPrice = self.latestDataBar.close
         return marketPrice
         # The last price bar can reflect the price better???
-        # return self.latestDataBar.Close if self.latestDataBar else getQcAlgo().Securities[self.getSymbol()].Price
+        # return self.latestDataBar.close if self.latestDataBar else getQcAlgo().securities[self.getSymbol()].price
 
     def getMaintenanceMargin(self):
         return getMaintenanceMargin(self.getSymbol(), self.getMarketPrice())
@@ -455,10 +486,10 @@ class LISecurityMonitor:
         if not self.isExchangeOpen():
             return  # Abort, wait for market open!
 
-        if self.verbose and (self.expiredSecurity or self.nextSecurity):
+        if self.expiredSecurity or self.nextSecurity:
             log(f"{self.getSymbolAlias()}: Manage expired security, isExchangeOpen={self.isExchangeOpen()}, "
-                f"expiredSecurity={cleanSymbolValue(self.expiredSecurity.Symbol) if self.expiredSecurity else None}, "
-                f"nextSecurity={cleanSymbolValue(self.nextSecurity.Symbol) if self.nextSecurity else None}.")
+                f"expiredSecurity={cleanSymbolValue(self.expiredSecurity.symbol) if self.expiredSecurity else None}, "
+                f"nextSecurity={cleanSymbolValue(self.nextSecurity.symbol) if self.nextSecurity else None}.", self.verbose)
 
         if self.isOption():
             log(f"{self.getSymbolAlias()}: Skipped managing expired option as it should be managed within the strategy!")
@@ -467,7 +498,7 @@ class LISecurityMonitor:
         if isDerivative(self.securityType):
             # Remove any expired security
             if self.expiredSecurity and self.expiredSecurity != self.contract:
-                log(f"{self.getSymbolAlias()}: Remove an expiredSecurity={cleanSymbolValue(self.expiredSecurity.Symbol)}.")
+                log(f"{self.getSymbolAlias()}: Remove an expiredSecurity={cleanSymbolValue(self.expiredSecurity.symbol)}.")
                 self.removeSecurity(self.expiredSecurity)
                 self.expiredSecurity = None
 
@@ -475,34 +506,40 @@ class LISecurityMonitor:
             nextSecurity = self.nextSecurity
             if self.isContractExpired():
                 if nextSecurity is None:
-                    alert(f"{self.getSymbolAlias()}: Failed to find next security, please investigate and redeploy!")
+                    if isLiveMode():
+                        alert(f"{self.getSymbolAlias()}: Failed to find next security, please investigate and redeploy!")
+                    else:
+                        getAlgo().quit(f"{self.getSymbolAlias()}: Failed to find next security!")
                 elif self.contract == nextSecurity:
-                    alert(f"{self.getSymbolAlias()}: The next security is the same, please investigate and redeploy!")
+                    if isLiveMode():
+                        alert(f"{self.getSymbolAlias()}: The next security is the same, please investigate and redeploy!")
+                    else:
+                        getAlgo().quit(f"{self.getSymbolAlias()}: The next security is the same!")
                 else:
                     self.removeSecurity(self.contract)  # Remove expired/existing security first!
                     self.contract = nextSecurity
                     self.addSecurity(self.contract)
                     self.nextSecurity = None
-                    investedQuantity = getAlgo().Portfolio[nextSecurity.Symbol].Quantity
-                    notify(f"{self.getSymbolAlias()}: Switched to contract: symbol={cleanSymbolValue(nextSecurity.Symbol)}, invested={investedQuantity}, "
-                           f"price={nextSecurity.Price}, volume={nextSecurity.Volume}, openInterest={nextSecurity.OpenInterest}, "
-                           f"expiry={nextSecurity.Expiry.strftime(LIGlobal.fullTimeFormat)}")
+                    investedQuantity = getAlgo().portfolio[nextSecurity.symbol].quantity
+                    notify(f"{self.getSymbolAlias()}: Switched to contract: symbol={cleanSymbolValue(nextSecurity.symbol)}, invested={investedQuantity}, "
+                           f"price={nextSecurity.price}, volume={nextSecurity.volume}, openInterest={nextSecurity.open_interest}, "
+                           f"expiry={nextSecurity.expiry.strftime(LIGlobal.minuteFormat)}")
 
     def updateDataConsolidator(self):
-        # if not getQcAlgo().LiveMode:
+        # if not getQcAlgo().live_mode:
         #     return  # Enable only for live mode!
         if not self.latestDataBar:
             return  # Abort as not warm up yet!
-        resolutionTimedelta = self.getResolutionTimedelta()
-        nextUpdateTime = self.latestDataBar.EndTime + resolutionTimedelta * self.monitorPeriod
-        # log(f"latestDataBar: {self.latestDataBar} endTime: {self.latestDataBar.EndTime}, nextUpdateTime={nextUpdateTime}")
-        if getAlgo().Time <= nextUpdateTime:
+        resolutionTimedelta = getResolutionTimedelta(self.monitorPeriod[1])
+        nextUpdateTime = self.latestDataBar.end_time + resolutionTimedelta * self.monitorPeriod[0]
+        # log(f"latestDataBar: {self.latestDataBar} endTime: {self.latestDataBar.end_time}, nextUpdateTime={nextUpdateTime}")
+        if getAlgo().time <= nextUpdateTime:
             # log(f"{self.getSymbolAlias()}: The data consolidator is in sync with market data stream!")
             return  # Abort as no need to update yet!
 
         dataBar = None
         isFakedBar = False
-        barEndTime = getAlgo().Time - resolutionTimedelta
+        barEndTime = getAlgo().time - resolutionTimedelta
         if self.fetchHistoryBarData:
             totalPeriods = 10
             bars = self.getHistoryBars(totalPeriods)
@@ -510,12 +547,12 @@ class LISecurityMonitor:
                 bar = None
                 for b in bars:
                     bar = b
-                    # log(f"{self.getSymbolAlias()}: history bar: {bar} endTime: {bar.EndTime.strftime(LIGlobal.secondFormat)}")
+                    # log(f"{self.getSymbolAlias()}: history bar: {bar} endTime: {bar.end_time.strftime(LIGlobal.secondFormat)}")
                 if bar:
                     if useQuoteBar(self.securityType):
-                        dataBar = QuoteBar(barEndTime, self.getSymbol(), bar.Bid, bar.LastBidSize, bar.Ask, bar.LastAskSize, resolutionTimedelta)
+                        dataBar = QuoteBar(barEndTime, self.getSymbol(), bar.bid, bar.last_bid_size, bar.ask, bar.last_ask_size, resolutionTimedelta)
                     else:
-                        dataBar = TradeBar(barEndTime, self.getSymbol(), bar.Open, bar.High, bar.Low, bar.Close, bar.Volume, resolutionTimedelta)
+                        dataBar = TradeBar(barEndTime, self.getSymbol(), bar.open, bar.high, bar.low, bar.close, bar.volume, resolutionTimedelta)
         if dataBar is None:
             marketPrice = self.getMarketPrice()
             # log(f"{self.getSymbolAlias()}: Faked a trade bar with current market price: {marketPrice}")
@@ -524,19 +561,18 @@ class LISecurityMonitor:
 
         consolidator = self.consolidators.get(self.getSymbol())
         if consolidator:
-            # if self.verbose:
-            #     log(f"{self.getSymbolAlias()}: Updating consolidator with the {'faked' if isFakedBar else 'last'} data bar: {dataBar} "
-            #         f"endTime: {dataBar.EndTime.strftime(LIGlobal.secondFormat)}")
-            consolidator.Update(dataBar)
+            # log(f"{self.getSymbolAlias()}: Updating consolidator with the {'faked' if isFakedBar else 'last'} data bar: {dataBar} "
+            #     f"endTime: {dataBar.end_time.strftime(LIGlobal.secondFormat)}", self.verbose)
+            consolidator.update(dataBar)
 
     def onDataConsolidated(self, sender: Object, bar: Bar):
         self.latestDataBar = bar
-        # log(f"{self.getSymbolStrAlias()}: On data consolidated as symbol={bar.Symbol.Value}, endTime={bar.EndTime}, {bar}", self.verbose)
+        # log(f"{self.getSymbolStrAlias()}: On data consolidated as symbol={bar.symbol.value}, endTime={bar.end_time}, {bar}", self.verbose)
 
         if self.atMarketOpeningTime():
-            self.marketOpenPrice = bar.Close
-            self.dayLowPrice = bar.Close
-            self.dayHighPrice = bar.Close
+            self.marketOpenPrice = bar.close
+            self.dayLowPrice = bar.close
+            self.dayHighPrice = bar.close
             # Calculate day open gap up or down percent
             openGapPercent = abs(self.getMarketOpenGapPercent())
             if openGapPercent > self.dayOpenGapUpDownPercent:  # Notify day open gap up/down event
@@ -546,16 +582,16 @@ class LISecurityMonitor:
 
         if self.atMarketClosingTime():
             self.isDayOpenWithGap = False
-            self.marketClosePrice = bar.Close
+            self.marketClosePrice = bar.close
 
-        if isActiveMarketTime(getAlgo().Time):
-            if bar.High > self.dayHighPrice:
-                self.dayHighPrice = bar.High
+        if isActiveMarketTime(getAlgo().time):
+            if bar.high > self.dayHighPrice:
+                self.dayHighPrice = bar.high
                 for (priority, listener) in self.dayHighBreachEventListeners:  # Notify day high breach event
                     listener.onDayHighBreachEvent()
 
-            if bar.Low < self.dayLowPrice:
-                self.dayLowPrice = bar.Low
+            if bar.low < self.dayLowPrice:
+                self.dayLowPrice = bar.low
                 for (priority, listener) in self.dayLowBreachEventListeners:  # Notify day low breach event
                     listener.onDayLowBreachEvent()
 
@@ -566,59 +602,75 @@ class LISecurityMonitor:
             listener.onMonitorBarUpdated(bar)
 
     def getMatchedSecurities(self, securities):
-        return [x for x in securities if (self.security is None) or ((x.Symbol.Canonical if isDerivative(x.Type) else x.Symbol) == self.security.Symbol)]
+        return [x for x in securities if (self.security is None) or ((x.symbol.canonical if isDerivative(x.type) else x.symbol) == self.security.symbol)]
 
     def searchOptionContract(self, contractCode):
-        for contractSymbol in getAlgo().OptionChainProvider.GetOptionContractList(self.security.Symbol, getAlgo().Time):
-            log(f"{self.getSymbolStrAlias()}: Search option contract: {contractSymbol.Value}")
-            if contractCode == cleanSymbolValue(contractSymbol):
-                return contractSymbol
+        for option in getAlgo().option_chain(self.security.symbol):
+            log(f"{self.getSymbolStrAlias()}: Search option contract: {option.symbol}")
+            if contractCode == cleanSymbolValue(option.symbol):
+                return option
+        return None
 
     def filterAndSortSecurities(self, securities):
         if self.isOption() and self.contract is None:
             # Sort by strike price to find the latest OTM (out-of-the-money) puts
-            latestExpiry = min([x.Expiry for x in securities])
-            if self.optionRight == OptionRight.Put:
+            latestExpiry = min([x.expiry for x in securities])
+            if self.optionRight == OptionRight.PUT:
                 securities = sorted(
-                    [x for x in securities if x.Expiry == latestExpiry and x.Right == OptionRight.Put and x.Underlying.Price > x.StrikePrice],
-                    key=lambda x: x.StrikePrice, reverse=True)[self.optionContractOTMLevel:self.optionContractOTMLevel + 2]
-            if self.optionRight == OptionRight.Call:
+                    [x for x in securities if x.expiry == latestExpiry and x.right == OptionRight.PUT and x.underlying.price > x.strike_price],
+                    key=lambda x: x.strike_price, reverse=True)[self.optionContractOTMLevel:self.optionContractOTMLevel + 2]
+            if self.optionRight == OptionRight.CALL:
                 securities = sorted(
-                    [x for x in securities if x.Expiry == latestExpiry and x.Right == OptionRight.Call and x.Underlying.Price < x.StrikePrice],
-                    key=lambda x: x.StrikePrice, reverse=False)[self.optionContractOTMLevel:self.optionContractOTMLevel + 2]
+                    [x for x in securities if x.expiry == latestExpiry and x.right == OptionRight.CALL and x.underlying.price < x.strike_price],
+                    key=lambda x: x.strike_price, reverse=False)[self.optionContractOTMLevel:self.optionContractOTMLevel + 2]
             if len(securities) == 0:
                 log(f"{self.getSymbolStrAlias()}: Not found any matched option contracts in added securities: {printSecurities(securities)}")
-                return  # Not found any matched options!
+                return None
             else:
                 log(f"{self.getSymbolStrAlias()}: Filtered option contracts in added securities: {printSecurities(securities)}")
         if self.isDerivative():
             # Sort by expiry to get the closest contract
-            securities.sort(key=lambda x: x.Expiry)
+            securities.sort(key=lambda x: x.expiry)
         return securities
+
+    def onWarmupFinished(self):
+        warmupSecurities = getAlgo().securities.values()
+        if warmupSecurities:
+            log(f"{self.getSymbolStrAlias()}: Warmup securities: {printSecurities(warmupSecurities)}", self.verbose)
+        warmupSecurities = self.getMatchedSecurities(warmupSecurities)
+        if len(warmupSecurities) == 0:
+            return  # Not found any matched securities!
+        self.addSecurities(warmupSecurities)
 
     # Handle dynamic security (e.g. future chains) by updating consolidators
     def onSecuritiesChanged(self, changes: SecurityChanges):
-        if changes.Count == 0 or (len(changes.AddedSecurities) == 0 and len(changes.RemovedSecurities) == 0):
+        if changes.count == 0 or (len(changes.added_securities) == 0 and len(changes.removed_securities) == 0):
             return  # Could be empty based on the filter!
 
-        # Log the changes for verification purpose
-        if self.verbose and changes.AddedSecurities:
-            log(f"{self.getSymbolStrAlias()}: Added securities: {printSecurities(changes.AddedSecurities)}")
-        if self.verbose and changes.RemovedSecurities:
-            log(f"{self.getSymbolStrAlias()}: Removed securities: {printSecurities(changes.RemovedSecurities)}")
-
         # Handle added securities if any!
-        addedSecurities = self.getMatchedSecurities(changes.AddedSecurities)
+        if changes.added_securities:
+            log(f"{self.getSymbolStrAlias()}: Added securities: {printSecurities(changes.added_securities)}", self.verbose)
+        addedSecurities = self.getMatchedSecurities(changes.added_securities)
         if len(addedSecurities) == 0:
             return  # Not found any matched securities!
+        self.addSecurities(addedSecurities)
 
+        # Handle removed securities if any!
+        if changes.removed_securities:
+            log(f"{self.getSymbolStrAlias()}: Removed securities: {printSecurities(changes.removed_securities)}", self.verbose)
+        removedSecurities = self.getMatchedSecurities(changes.removed_securities)
+        if len(removedSecurities) == 0:
+            return  # Not found any matched securities!
+        self.removeSecurities(removedSecurities)
+
+    def addSecurities(self, addedSecurities: list[Security]):
         # Log matched securities for verification purpose
-        if self.verbose and addedSecurities:
-            log(f"{self.getSymbolStrAlias()}: Matched added securities: {printSecurities(addedSecurities)}.")
+        if addedSecurities:
+            log(f"{self.getSymbolStrAlias()}: Adding securities: {printSecurities(addedSecurities)}.", self.verbose)
 
         if self.futureContractCode:
-            if self.contract is None or cleanSymbolValue(self.contract.Symbol) != self.futureContractCode:
-                matchedSecurities = [x for x in addedSecurities if self.futureContractCode == cleanSymbolValue(x.Symbol)]
+            if self.contract is None or cleanSymbolValue(self.contract.symbol) != self.futureContractCode:
+                matchedSecurities = [x for x in addedSecurities if self.futureContractCode == cleanSymbolValue(x.symbol)]
                 if not matchedSecurities:
                     terminate(f"Failed to find {self.futureContractCode} in added securities: {printSecurities(addedSecurities)}.")
                 self.contract = matchedSecurities[0]
@@ -628,8 +680,8 @@ class LISecurityMonitor:
             return  # Abort, use the reserved contract!
 
         if self.futureContractExpiry:
-            if self.contract is None or self.contract.Expiry.date() != self.futureContractExpiry:
-                matchedSecurities = [x for x in addedSecurities if self.futureContractExpiry == x.Expiry.date()]
+            if self.contract is None or self.contract.expiry.date() != self.futureContractExpiry:
+                matchedSecurities = [x for x in addedSecurities if self.futureContractExpiry == x.expiry.date()]
                 if not matchedSecurities:
                     terminate(f"Failed to find expiry date {self.futureContractExpiry} in added securities: {printSecurities(addedSecurities)}.")
                 self.contract = matchedSecurities[0]
@@ -639,8 +691,8 @@ class LISecurityMonitor:
             return  # Abort, use the reserved contract!
 
         if self.optionContractCode:
-            if self.contract is None or cleanSymbolValue(self.contract.Symbol) != self.optionContractCode:
-                matchedSecurities = [x for x in addedSecurities if self.optionContractCode == cleanSymbolValue(x.Symbol)]
+            if self.contract is None or cleanSymbolValue(self.contract.symbol) != self.optionContractCode:
+                matchedSecurities = [x for x in addedSecurities if self.optionContractCode == cleanSymbolValue(x.symbol)]
                 if not matchedSecurities:
                     terminate(f"Failed to find {self.optionContractCode} in added securities: {printSecurities(addedSecurities)}.")
                 self.contract = matchedSecurities[0]
@@ -660,17 +712,17 @@ class LISecurityMonitor:
         thisSecurity = None
         nextSecurity = None
         for security in addedSecurities:
-            if isDerivative(security.Type):
-                if security.Symbol.IsCanonical():
-                    # log(f"{self.getSymbolAlias()}: Skip the canonical security: {symbol.Value}")
+            if isDerivative(security.type):
+                if security.symbol.is_canonical():
+                    # log(f"{self.getSymbolAlias()}: Skip the canonical security: {symbol.value}")
                     continue
-                securityExpiry = roundDownTime(security.Expiry, delta=timedelta(days=1))
-                rolloverDate = roundDownTime(security.Expiry - timedelta(self.futureRolloverDays), delta=timedelta(days=1))
-                currentDate = roundDownTime(getAlgo().Time, delta=timedelta(days=1))
+                securityExpiry = roundDownTime(security.expiry, delta=timedelta(days=1))
+                rolloverDate = roundDownTime(security.expiry - timedelta(self.futureRolloverDays), delta=timedelta(days=1))
+                currentDate = roundDownTime(getAlgo().time, delta=timedelta(days=1))
                 log(f"{self.getSymbolStrAlias()}: securityExpiry={securityExpiry}, rolloverDate={rolloverDate}, currentDate={currentDate}, "
-                    f"isNotInvested={isNotInvested(security.Symbol)}", self.verbose)
-                if rolloverDate <= currentDate and isNotInvested(security.Symbol):
-                    log(f"{self.getSymbolStrAlias()}: Will remove the security expiring in {self.futureRolloverDays} days: {security.Symbol.Value}")
+                    f"isNotInvested={isNotInvested(security.symbol)}", self.verbose)
+                if rolloverDate <= currentDate and isNotInvested(security.symbol):
+                    log(f"{self.getSymbolStrAlias()}: Will remove the security expiring in {self.futureRolloverDays} days: {security.symbol.value}")
                     self.expiredSecurity = security
                     self.manageExpiredSecurity()
                     continue
@@ -678,24 +730,24 @@ class LISecurityMonitor:
                 thisSecurity = security
             elif not nextSecurity:
                 nextSecurity = security  # Pick the second closed (front month) security
-            elif thisSecurity.Expiry > security.Expiry:
+            elif thisSecurity.expiry > security.expiry:
                 nextSecurity = thisSecurity  # Reserve as the second closed (front month) security!
                 thisSecurity = security  # Pick the closest (front month) security!
-                log(f"{self.getSymbolStrAlias()}: thisSecurity={thisSecurity.Symbol.Value}, nextSecurity={nextSecurity.Symbol.Value}")
+                log(f"{self.getSymbolStrAlias()}: thisSecurity={thisSecurity.symbol.value}, nextSecurity={nextSecurity.symbol.value}")
 
         # Do nothing if thisSecurity is None, Stop Algo only when manual intervene required!
         if thisSecurity is not None:
             self.nextSecurity = nextSecurity  # Save it for daily manageExpiredSecurity.
-            if isDerivative(thisSecurity.Type):
+            if isDerivative(thisSecurity.type):
                 if self.contract is None:
                     self.contract = thisSecurity
                     self.addSecurity(self.contract)
-                    log(f"{self.getSymbolStrAlias()}: Use contract: symbol={cleanSymbolValue(thisSecurity.Symbol)}, invested={thisSecurity.Invested}, "
-                        f"price={thisSecurity.Price}, volume={thisSecurity.Volume}, openInterest={thisSecurity.OpenInterest}, "
-                        f"expiry={thisSecurity.Expiry.strftime(LIGlobal.fullTimeFormat)}, "
-                        f"{'strikePrice=' + str(thisSecurity.StrikePrice) + ', ' if isOption(thisSecurity.Type) else ''}"
-                        f"{'marketPrice=' + str(thisSecurity.Underlying.Price) + ', ' if isOption(thisSecurity.Type) else ''}"
-                        f"nextSecurity={cleanSymbolValue(nextSecurity.Symbol) if nextSecurity else None}")
+                    log(f"{self.getSymbolStrAlias()}: Use contract: symbol={cleanSymbolValue(thisSecurity.symbol)}, invested={thisSecurity.invested}, "
+                        f"price={thisSecurity.price}, volume={thisSecurity.volume}, openInterest={thisSecurity.open_interest}, "
+                        f"expiry={thisSecurity.expiry.strftime(LIGlobal.minuteFormat)}, "
+                        f"{'strikePrice=' + str(thisSecurity.strike_price) + ', ' if isOption(thisSecurity.type) else ''}"
+                        f"{'marketPrice=' + str(thisSecurity.underlying.price) + ', ' if isOption(thisSecurity.type) else ''}"
+                        f"nextSecurity={cleanSymbolValue(nextSecurity.symbol) if nextSecurity else None}")
                     self.manageExpiredSecurity()
                 else:
                     self.nextSecurity = thisSecurity  # Save it for when current contract expired
@@ -705,26 +757,22 @@ class LISecurityMonitor:
                     self.removeSecurity(self.security)  # Remove expired/existing security first!
                 self.security = thisSecurity
                 self.addSecurity(self.security)
-                log(f"{self.getSymbolStrAlias()}: Use security: symbol={thisSecurity.Symbol.Value}, invested={thisSecurity.Invested}, "
-                    f"price={thisSecurity.Price}, volume={thisSecurity.Volume}, openInterest={thisSecurity.OpenInterest}")
+                log(f"{self.getSymbolStrAlias()}: Use security: symbol={thisSecurity.symbol.value}, invested={thisSecurity.invested}, "
+                    f"price={thisSecurity.price}, volume={thisSecurity.volume}, openInterest={thisSecurity.open_interest}")
 
-        # Handle removed securities if any!
-        removedSecurities = self.getMatchedSecurities(changes.RemovedSecurities)
-        if len(removedSecurities) == 0:
-            return  # Not found any matched securities!
-
+    def removeSecurities(self, removedSecurities: list[Security]):
         # Log matched security for verification purpose
         if removedSecurities:
-            log(f"{self.getSymbolStrAlias()}: Matched removed securities: {printSecurities(removedSecurities)}")
+            log(f"{self.getSymbolStrAlias()}: Removing securities: {printSecurities(removedSecurities)}")
 
         if self.isOption() and self.contract:
             log(f"{self.getSymbolAlias()}: Skipped removing option contract as it should be managed within the strategy!")
             return  # Abort, managed within strategy
 
         for security in removedSecurities:
-            if (self.contract if isDerivative(security.Type) else self.security) == security:
+            if (self.contract if isDerivative(security.type) else self.security) == security:
                 alert(f"{self.getSymbolAlias()}: Failed to manage expired security, please switch over to next security!")
-                getAlgo().Quit("Quit algorithm on EXPIRED SECURITY!")
+                getAlgo().quit("Quit algorithm on EXPIRED SECURITY!")
                 return  # Quit execution immediately!
                 # if security != self.nextSecurity:
                 #     self.enableTempTradable()
@@ -732,11 +780,11 @@ class LISecurityMonitor:
                 #     self.disableTempTradable()
                 # else:
                 #     alert(f"{self.getSymbolStrAlias()}: Failed to manage expired security, please switch over to next security!")
-                #     getQcAlgo().Quit("Quit algorithm on EXPIRED SECURITY!")
+                #     getQcAlgo().quit("Quit algorithm on EXPIRED SECURITY!")
                 #     return
             self.removeSecurity(security)
             # Will be reset by new added security later
-            if self.security and security.Symbol == self.security.Symbol:
+            if self.security and security.symbol == self.security.symbol:
                 self.security = None
-            if self.contract and security.Symbol == self.contract.Symbol:
+            if self.contract and security.symbol == self.contract.symbol:
                 self.contract = None

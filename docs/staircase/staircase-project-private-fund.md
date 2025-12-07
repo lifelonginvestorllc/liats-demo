@@ -3,7 +3,7 @@
 **由终身投资者有限责任公司（Lifelong Investor LLC）精心打造的第1号私募基金！**
 
 - 纳西姆·塔勒布的杠铃投资策略认为：在充满不确定性和难以预测的世界中，投资者应该把一小部分资产投资在高风险但潜在回报巨大的机会中。
-- 阶梯计划私募基金即是相对激进的主动投机：程序化交易，双向对冲，使用杠杆，借力期货，高风险，高波动，去博取非对称的高收益。
+- 阶梯计划私募基金是相对激进的主动投机：程序化交易，双向对冲，使用杠杆，借力期货，高风险，高波动，去博取非对称的高收益。
 - LIATS（终身投资者算法交易系统）是敏捷灵活且透明可见的，将最合适的交易策略应用于精心挑选的证券目标，有监督地进行交易。
 - Trading is NOT to stay secure and comfortable, but to take risks and become wealthy.
 
@@ -74,7 +74,7 @@
     - ```YanhuaHedge 05/16T12:33 Start Grid Trading Contrarian: symbol=NasdaqTrail(MNQ), lotQuantity=2, securityType=Future, configs={aliasName: NasdaqTrail, monitorPeriod: 15, liquidateOnStopLossAmount: 200000, liquidateOnTakeProfitAmount: 50000, gridLongLots: 15, gridLotLevelPercent: 0.6, gridLotLevelAugment: 0.015, gridLotStopLossFactor: 25, gridLotStopProfitFactors: (0.5, 2), gridCancelOrdersAfterClosed: True, gridTrailingOpenPriceFactor: 1.0, gridRetainOpenedLots: 2}```
     - ```NasdaqTrail(MNQ20M25): Session#1, marketPrice=21444.25, filledLots=(4, 4, 0), investedQuantity=8, totalNetProfit=4253.26, overallMaxProfitLoss=[4239.12, 0.0], startPrices={BTD: 21710.5}, targetPrices(lot#/open/close/stopLoss)=[#1/21580.25/21600.0/18250.0, #2/21444.25/21482.0/18067.5, #3/21302.75/21470.5/17975.0, #4/21155.75/21293.0/17744.5, #5/21003.5/21557.75/17882.0, #6/20846.0/20987.75/17328.25, #7/20683.25/20827.0/17115.5, #8/20515.75/20661.5/16899.75, #9/20343.5/20491.0/16681.75, #10/20166.5/20315.75/16461.0, #11/19985.0/20136.0/16237.75, #12/19799.25/19952.0/16012.75, #13/19609.25/19763.5/15785.5, #14/19415.0/19570.5/15556.25, #15/19217.0/19374.0/15325.5]```
 - 交易通知：
-    - ```YanhuaHedge 05/16T10:43 Grid NasdaqTrail(MNQ20M25) Market Order (GAIN): Filled -2 at price=21348.25, fee=0.62, marketPrice=21360.0. holding 10(427799.33) now, realized/unrealized 1805.76/-620.03(-0.14494%), openPrice=20896.5, filledPrice=21348.25, totalProfitLoss=1185.73(0.23287%). [05/16T10:43 Lot#6/1: Submit CLOSING STOP PROFIT order at stopLimitPrices=21363.25|1.03571, targetPrice=21038.5, targetQuantity=-2, startPrice=21600, marketPrice=21360.0, openPrice=20896.5.]```
+    - ```YanhuaHedge 05/16T10:43 Grid NasdaqTrail(MNQ20M25) Market Order (GAIN): Filled -2 at price=21348.25, fee=0.62, marketPrice=21360.0. holding 10(427799.33) now, realized/unrealized 1805.76/-620.03(-0.14494%), openPrice=20896.5, filledPrice=21348.25, maxProfitLoss=1185.73(0.23287%). [05/16T10:43 Lot#6/1: Submit CLOSING STOP PROFIT order at stopLimitPrices=21363.25|1.03571, targetPrice=21038.5, targetQuantity=-2, startPrice=21600, marketPrice=21360.0, openPrice=20896.5.]```
 - 日报通知：
     - ```YanhuaHedge 05/16T18:00 Daily Report: dailyClosedTrades=3, avgDuration=0:00:00, dailyProfit=3,501.00, dailyAccruedFees=3.72, totalCapital=13,320.00, totalQuantity=6.0, dailyNetProfit=3,497.28(26.26%), overallProfitLoss=5,849.78(1.2307%), holdingQuantity=30.0, holdingCost=475,322.40. cashRemaining=47,981.06, marginRemaining=202,234.06, totalPortfolioValue=412,534.56. holdingPositions=[MCL18N25:22@60.44, MNQ20M25:8@21396.5, QQQ:700@362.73].```
 - 周报通知：
@@ -82,29 +82,7 @@
 
 ## 回归测试业绩表现
 
-**以下回归测试均使用50万美元为起始资金规模，交易1～5个期货品种。**
+### 以50万美元为起始资金规模，从2022初到2025年底，共4年交易回测业绩表现
 
-### 2023年度回测
-
-- <img src="2023-annual-performance-chart.png" alt="2023年度回测图表" width="1200"/>
-- <img src="2023-annual-performance-result.png" alt="2023年度回测结果" width="1200"/>
-
-### 2024年度回测
-
-- <img src="2024-annual-performance-chart.png" alt="2024年度回测图表" width="1200"/>
-- <img src="2024-annual-performance-result.png" alt="2024年度回测结果" width="1200"/>
-
-### 2025五个月回测（关税风波）
-
-- <img src="2025-5months-performance-chart.png" alt="2025五个月回测图表" width="1200"/>
-- <img src="2025-5months-performance-result.png" alt="2025五个月回测结果" width="1200"/>
-
-### 2025五个月顺势交易回测（关税风波）
-
-- <img src="2025-5months-trending-chart.png" alt="2025五个月顺势回测图表" width="1200"/>
-- <img src="2025-5months-trending-result.png" alt="2025五个月顺势回测结果" width="1200"/>
-
-### 2025六个月通道交易回测（关税风波）
-
-- <img src="2025-6months-banding-chart.jpg" alt="2025六个月顺势回测图表" width="1200"/>
-- <img src="2025-6months-results-chart.jpg" alt="2025六个月顺势回测结果" width="1200"/>
+- <img src="2022-2025-4years-performance-chart.png" alt="2022-2025四年回测图表" width="1200"/>
+- <img src="2022-2025-4years-performance-result.png" alt="2022-2025四年回测结果" width="1200"/>

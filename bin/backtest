@@ -1,5 +1,14 @@
 #!/bin/bash
 
+# Check if current path equals ~/lean, exit if not
+EXPECTED_PATH="$HOME/lean"
+CURRENT_PATH=$(pwd)
+if [[ "$CURRENT_PATH" != "$EXPECTED_PATH" ]]; then
+  echo -e "\033[0;31mScript must be run under ~/lean directory\033[0m"
+  echo -e "\033[0;35mCurrent path: $CURRENT_PATH; Expected path: $EXPECTED_PATH\033[0m"
+  exit 0
+fi
+
 if [ -z "$1" ]; then
   echo "Please specify the account name! e.g. liats, CongTest, LifelongPaper"
   exit 1
@@ -12,24 +21,14 @@ if [[ $ACCOUNT == */ ]]; then
   # ACCOUNT=$(echo "$ACCOUNT" | sed 's/.$//')
 fi
 
-echo "Backtesting ${ACCOUNT}..."
+echo -e "\033[0;35mBacktesting ${ACCOUNT}...\033[0m"
 
 MAIN_CODE=main.py
 CONFIG_FILE=config.json
-DEFAULT_ACCOUNT="liats"
+SET_API_TOKEN=false
 QC_USER=llc # Use llc for backtest by default
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
-
-if [[ ${ACCOUNT} == "${DEFAULT_ACCOUNT}" ]]; then
-  # Login QuantConnect user if required
-  if [ -n "${QC_USER}" ]; then
-    source "${SCRIPT_DIR}"/login "${QC_USER}"
-  fi
-  # Run backtest on project
-  lean cloud backtest "${ACCOUNT}" --push
-  exit 0
-fi
 
 LIVE_DIR=$(dirname "${SCRIPT_DIR}")/live
 PROJECT_DIR=$(dirname "${LIVE_DIR}")
@@ -50,11 +49,20 @@ if [ -n "${QC_USER}" ]; then
   source "${SCRIPT_DIR}"/login "${QC_USER}"
 fi
 
+if [ "$SET_API_TOKEN" = true ]; then
+  # Set API token if setPortfolioRepute(...) is specified in main.py
+  MATCHED_LINE=$(grep -E -n "^\s*setPortfolioRepute\(.+\)\s*$" "${ACCOUNT_CONFIG}"/${MAIN_CODE})
+  if [ -n "${MATCHED_LINE}" ]; then
+    CLOUD_ID=$(grep -Ei 'cloud-id' "${ACCOUNT_CONFIG}"/${CONFIG_FILE} | grep -oEi '\d+')
+    source "${SCRIPT_DIR}"/set-api-token "${CLOUD_ID}/backtest/webApiToken" "${WEB_API_USER}" "${WEB_API_PWD}" true
+  fi
+fi
+
 # Go back to lean home dir
 cd "${PROJECT_DIR}"/.. || exit
 
 # Sync to live project dir
-rsync -a --delete "${PROJECT_DIR}"/ "${ACCOUNT_PROJECT}"/
+rsync -a --delete --exclude-from="${PROJECT_DIR}"/.leanignore "${PROJECT_DIR}"/ "${ACCOUNT_PROJECT}"/
 
 # Copy over main/config files
 cp "${ACCOUNT_CONFIG}"/${MAIN_CODE} "${ACCOUNT_PROJECT}"/${MAIN_CODE}

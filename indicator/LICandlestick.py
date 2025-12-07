@@ -1,30 +1,17 @@
-# region imports
+from AlgorithmImports import *
 from core.LIConfiguration import *
 
 
-# endregion
-
 class LICandlestick:
-    def __init__(self,
-                 time: datetime,
-                 open: float,
-                 high: float,
-                 low: float,
-                 close: float,
-                 volume: int,
-                 configs: dict):
-        self.time = time
-        self.open = open
-        self.high = high
-        self.low = low
-        self.close = close
-        self.volume = volume
+    def __init__(self, bar: IBaseDataBar, configs: dict):
+        self.bar = bar
         self.configs = configs
 
         # Updated by rolling window dynamically if not specified
-        self.avgBodySize = configs.get(LIConfigKey.candlestickAvgBodySize, (close + open) / 2)
+        self.avgBodySize = configs.get(LIConfigKey.candlestickAvgBodySize, (self.bar.close + self.bar.open) / 2)
         # Updated by rolling window dynamically if not specified
-        self.avgWickSize = configs.get(LIConfigKey.candlestickAvgWickSize, (high - low) / 3)
+        self.avgWickSize = configs.get(LIConfigKey.candlestickAvgWickSize, (self.bar.high - self.bar.low) / 3)
+        self.bodyTolerance = configs.get(LIConfigKey.candlestickBodyTolerance, LIDefault.candlestickBodyTolerance)
         self.dojiBodyMaxRatio = configs.get(LIConfigKey.candlestickDojiBodyMaxRatio, LIDefault.candlestickDojiBodyMaxRatio)
         self.spinningTopBodyMaxRatio = configs.get(LIConfigKey.candlestickSpinningTopBodyMaxRatio, LIDefault.candlestickSpinningTopBodyMaxRatio)
 
@@ -32,16 +19,19 @@ class LICandlestick:
         return self.configs
 
     def isUp(self):
-        return self.close - self.open > 0
+        return self.body() > 0 and self.bodySize() > self.bodyTolerance
 
     def isFlat(self):
-        return self.close - self.open == 0
+        return self.body() == 0
 
     def isDown(self):
-        return self.close - self.open < 0
+        return self.body() < 0 and self.bodySize() > self.bodyTolerance
+
+    def body(self) -> float:
+        return round(self.bar.close - self.bar.open, LIGlobal.percentPrecision)
 
     def bodySize(self) -> float:
-        return abs(self.close - self.open)
+        return abs(self.body())
 
     def bodyRatio(self) -> float:
         ratio = (self.bodySize() / self.avgBodySize) if self.avgBodySize else self.bodySize()
@@ -53,13 +43,13 @@ class LICandlestick:
         return self.wickUpperSize() + self.wickLowerSize()
 
     def wickUpperSize(self) -> float:
-        return self.high - max(self.open, self.close)
+        return self.bar.high - max(self.bar.open, self.bar.close)
 
     def wickUpperRatio(self) -> float:
         return (self.wickUpperSize() / self.avgWickSize) if self.avgWickSize else self.wickUpperSize()
 
     def wickLowerSize(self) -> float:
-        return min(self.open, self.close) - self.low
+        return min(self.bar.open, self.bar.close) - self.bar.low
 
     def wickLowerRatio(self) -> float:
         return (self.wickLowerSize() / self.avgWickSize) if self.avgWickSize else self.wickLowerSize()
@@ -121,12 +111,12 @@ class LICandlestick:
 
     def __str__(self) -> str:
         result = "candlestick={"
-        result += f"time={self.time.strftime('%H:%M')},"
-        result += f"open={self.open:.2f},"
-        result += f"high={self.high:.2f},"
-        result += f"low={self.low:.2f},"
-        result += f"close={self.close:.2f},"
-        result += f"volume={self.volume:.0f},"
+        result += f"time={self.bar.end_time.strftime('%H:%M')},"
+        result += f"open={self.bar.open:.2f},"
+        result += f"high={self.bar.high:.2f},"
+        result += f"low={self.bar.low:.2f},"
+        result += f"close={self.bar.close:.2f},"
+        result += f"volume={self.bar.volume:.0f},"
         result += f"bodyRatio={self.bodyRatio():.2f},"
         result += f"wickBodyRatio={self.wickBodyRatio():.2f},"
         result += f"wickUpDownRatio={self.wickTopDownRatio():.2f},"

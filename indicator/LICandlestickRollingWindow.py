@@ -1,9 +1,6 @@
-# region imports
+from AlgorithmImports import *
 
 from indicator.LICandlestick import *
-
-
-# endregion
 
 
 class LICandlestickRollingWindow:
@@ -60,18 +57,21 @@ class LICandlestickRollingWindow:
 
     def append(self, candlestick: LICandlestick):
         self.totalCount += 1
-        self.totalVolume += candlestick.volume
+        self.totalVolume += candlestick.bar.volume
         self.totalBodySize += candlestick.bodySize()
         self.totalWickSize += candlestick.wickUpperSize() + candlestick.wickLowerSize()
-        if self.defaultAvgBodySize is None:
-            self.configs[LIConfigKey.candlestickAvgBodySize] = self.avgBodySize()
-        if self.defaultAvgWickSize is None:
-            self.configs[LIConfigKey.candlestickAvgWickSize] = self.avgWickSize()
+        # if self.defaultAvgBodySize is None:
+        #     self.configs[LIConfigKey.candlestickAvgBodySize] = self.avgBodySize()
+        # if self.defaultAvgWickSize is None:
+        #     self.configs[LIConfigKey.candlestickAvgWickSize] = self.avgWickSize()
         # Add the most recent one to first position
         self.candlesticks.insert(0, candlestick)
         # Remove last/staled/tailing candlesticks!
         while self.count() > self.windowSize:
             self.candlesticks.pop()
+
+    def candlestick(self) -> LICandlestick:
+        return self.candlesticks[0]  # Most recent candlestick
 
     def avgVolume(self) -> float:
         return round(self.totalVolume / max(self.totalCount, 1), LIGlobal.percentPrecision)

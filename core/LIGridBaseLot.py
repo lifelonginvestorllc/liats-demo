@@ -1,20 +1,16 @@
-# region imports
-import sys
-from core.LIPositionManager import *
+from AlgorithmImports import *
+from core.LITradingLot import *
 
 
-# endregion
-
-class LIGridBaseLot:
+class LIGridBaseLot(LITradingLot):
     def __init__(self, lotId, gridTrading):
-        self.lotId = lotId
+        super().__init__(lotId, gridTrading.positionManager)
+
         self.gridTrading = gridTrading
         configs = gridTrading.configs
 
         self.nextLot: LIGridTradingLot = None
         self.prevLot: LIGridTradingLot = None
-
-        self.verbose = configs.get(LIConfigKey.verbose, LIDefault.verbose)
 
         self.openWithStopOrderType = configs.get(LIConfigKey.openWithStopOrderType, LIDefault.openWithStopOrderType)
         self.openWithMarketOrderType = configs.get(LIConfigKey.openWithMarketOrderType, LIDefault.openWithMarketOrderType)
@@ -43,6 +39,9 @@ class LIGridBaseLot:
         self.gridCancelOrdersAfterClosed = configs.get(LIConfigKey.gridCancelOrdersAfterClosed, LIDefault.gridCancelOrdersAfterClosed)
         self.gridTrailingOpenPriceFactor = configs.get(LIConfigKey.gridTrailingOpenPriceFactor, LIDefault.gridTrailingOpenPriceFactor)
 
+        self.gridLotOpenUponTradeInsight = configs.get(LIConfigKey.gridLotOpenUponTradeInsight, LIDefault.gridLotOpenUponTradeInsight)
+        self.gridLotCloseUponTradeInsight = configs.get(LIConfigKey.gridLotCloseUponTradeInsight, LIDefault.gridLotCloseUponTradeInsight)
+
         if self.isMomentumMode():
             if self.gridPriceInStopProfitFactor:
                 terminate(f"{LIConfigKey.gridPriceInStopProfitFactor} is not applicable for {self.getGridMode()} mode.")
@@ -53,7 +52,7 @@ class LIGridBaseLot:
         elif self.isContrarianMode():
             if self.openWithStopOrderType:
                 terminate(f"{LIConfigKey.openWithStopOrderType} is not applicable for {self.getGridMode()} mode.")
-            # if self.openWithMarketOrderType and not self.gridTrading.gridUseTradeInsight and not self.gridLotBoostingProfitFactor:
+            # if self.openWithMarketOrderType and not self.gridLotBoostingProfitFactor:
             #     terminate(f"{LIConfigKey.openWithMarketOrderType} is not applicable for {self.getGridMode()} mode.")
         if self.gridLotMaxProfitFactor and self.gridLotTakeProfitFactor and self.gridLotMaxProfitFactor < self.gridLotTakeProfitFactor:
             terminate(f"Please make sure {LIConfigKey.gridLotMaxProfitFactor} is greater than {LIConfigKey.gridLotTakeProfitFactor}.")
@@ -67,60 +66,16 @@ class LIGridBaseLot:
         if self.isMomentumMode() and not self.gridLotStopLossFactor:
             terminate(f"Please set {LIConfigKey.gridLotStopLossFactor} as gridMode={self.gridTrading.gridMode}.")
 
-        self.positionManager = self.gridTrading.positionManager
         self.canonicalSymbol = self.positionManager.getCanonicalSymbol()
-
-        self.filledOpenPrice = 0
-        self.filledOpenQuantity = 0
-        self.trailingOpenPrice = 0
-        self.actualOpenPrice = 0
-        self.openOrderTicket: OrderTicket = None
-        self.openOrderTransferId = None
-        self.createdOpenOrderTime = None
-
-        self.stopOrderPrice = 0  # Stop loss or profit
-        self.trailingAmount = 0
-        self.closeOrderPrice = 0
-        self.closeOrderQuantity = 0
-        self.closeOrderTicket: OrderTicket = None
-        self.closeOrderTransferId = None
-        self.trailingStopLossPrice = None
-        self.trailingStopProfitPrice = None
-
-        self.accruedFees: float = 0.0
-        self.lotStatus: LILotStatus = LILotStatus.IDLING
-
-        self.pausedOpening = False
+        self.trailingOpenPrice = 0.0
+        self.actualOpenPrice = 0.0
         self.accruedLostPoints = 0
-        self.closedTradesCount = 0
-        self.realizedProfitLoss = 0.0
-
-    def getSymbol(self):
-        return self.positionManager.getSymbol()
-
-    def getSymbolAlias(self):
-        return self.positionManager.getSymbolAlias()
-
-    def getNotifyPrefix(self):
-        return self.positionManager.getNotifyPrefix()
-
-    def getSecurityMultiplier(self):
-        return self.positionManager.getSecurityMultiplier()
-
-    def getAveragePrice(self):
-        return self.positionManager.getAveragePrice()
 
     def getMarketPrice(self, bar=None):
         return self.gridTrading.getMarketPrice(bar)
 
-    def getLotId(self):
-        return self.lotId
-
     def getLotName(self):
         return f"Lot#{self.lotId}/{self.gridTrading.sessionId}"
-
-    def getLotStatus(self):
-        return self.lotStatus
 
     def getLotMetadata(self, key, default=None):
         # Please note to convert lot id to string first!
@@ -140,6 +95,7 @@ class LIGridBaseLot:
             if lot.isTradeLot():
                 return lot
             lot = lot.nextLot
+        return None
 
     def getPrevLot(self):
         lot = self.prevLot
@@ -147,6 +103,7 @@ class LIGridBaseLot:
             if lot.isTradeLot():
                 return lot
             lot = lot.prevLot
+        return None
 
     def getCounterpartLot(self):
         return self.gridTrading.getCounterpartLot(peerLot=self)
@@ -178,18 +135,22 @@ class LIGridBaseLot:
     def isFirstLongLot(self):
         if self.gridTrading.getFirstLongLot():
             return self.lotId == self.gridTrading.getFirstLongLot().lotId
+        return None
 
     def isFirstShortLot(self):
         if self.gridTrading.getFirstShortLot():
             return self.lotId == self.gridTrading.getFirstShortLot().lotId
+        return None
 
     def isLastLongLot(self):
         if self.gridTrading.getLastLongLot():
             return self.lotId == self.gridTrading.getLastLongLot().lotId
+        return None
 
     def isLastShortLot(self):
         if self.gridTrading.getLastShortLot():
             return self.lotId == self.gridTrading.getLastShortLot().lotId
+        return None
 
     def isRetainedLot(self):
         return abs(self.gridTrading.gridRetainOpenedLots) >= abs(self.lotId)
@@ -206,6 +167,12 @@ class LIGridBaseLot:
     def isLosingLot(self):
         return self.getProfitLossPoints() < 0
 
+    def isCommandMode(self):
+        return self.gridTrading.isCommandMode()
+
+    def isNotCommandMode(self):
+        return self.gridTrading.isNotCommandMode()
+
     def isMomentumMode(self):
         return self.gridTrading.isMomentumMode()
 
@@ -220,6 +187,7 @@ class LIGridBaseLot:
             return self.prevLot
         if self.isShortLot():
             return self.nextLot
+        return None
 
     def getGridMode(self):
         return self.gridTrading.gridMode
@@ -235,6 +203,7 @@ class LIGridBaseLot:
                 return LIGridSide.STD
             elif self.isContrarianMode():
                 return LIGridSide.STU
+        return None
 
     def hasOpenPosition(self):
         # Open order ticket could be null!
@@ -266,20 +235,22 @@ class LIGridBaseLot:
         return self.gridTrading.gridStartPrices[self.getGridSide()]
 
     def getOpenFromPrice(self):
-        if self.gridTrading.gridOpenFromPrices:
+        if self.getGridSide() in self.gridTrading.gridOpenFromPrices:
             return self.gridTrading.gridOpenFromPrices[self.getGridSide()]
+        return None
 
     def getTicketPrice(self, orderTicket: OrderTicket):
-        if orderTicket.OrderType == OrderType.StopLimit:
-            return orderTicket.Get(OrderField.LimitPrice)
-        elif orderTicket.OrderType == OrderType.TrailingStop:
-            return orderTicket.Get(OrderField.StopPrice)
-        elif orderTicket.OrderType == OrderType.StopMarket:
-            return orderTicket.Get(OrderField.StopPrice)
-        elif orderTicket.OrderType == OrderType.Limit:
-            return orderTicket.Get(OrderField.LimitPrice)
-        elif orderTicket.OrderType == OrderType.Market:
-            return self.positionManager.getMarketPrice()
+        if orderTicket.order_type == OrderType.STOP_LIMIT:
+            return orderTicket.get(OrderField.LIMIT_PRICE)
+        elif orderTicket.order_type == OrderType.TRAILING_STOP:
+            return orderTicket.get(OrderField.STOP_PRICE)
+        elif orderTicket.order_type == OrderType.STOP_MARKET:
+            return orderTicket.get(OrderField.STOP_PRICE)
+        elif orderTicket.order_type == OrderType.LIMIT:
+            return orderTicket.get(OrderField.LIMIT_PRICE)
+        elif orderTicket.order_type == OrderType.MARKET:
+            return self.gridTrading.getMarketPrice()
+        return None
 
     def getTargetQuantity(self):
         return self.gridTrading.getTargetQuantity(self)
@@ -309,6 +280,7 @@ class LIGridBaseLot:
 
             return round(self.gridLotStopProfitFactors[0] + distance, LIGlobal.percentPrecision)
             # return round(self.gridLotStopProfitFactors[1] - distance, LIGlobal.percentPrecision)
+        return None
 
     def getTargetGainPoints(self):
         targetPoints = 0
@@ -368,13 +340,16 @@ class LIGridBaseLot:
         return self.filledOpenPrice * abs(self.filledOpenQuantity) * self.getSecurityMultiplier()
 
     def getClosingPrice(self):
-        return self.closeOrderTicket.Get(OrderField.LimitPrice)
+        return self.closeOrderTicket.get(OrderField.LIMIT_PRICE)
 
     def getClosingQuantity(self):
-        return self.closeOrderTicket.Quantity - self.closeOrderTicket.QuantityFilled if self.closeOrderTicket else self.closeOrderQuantity
+        return self.closeOrderTicket.quantity - self.closeOrderTicket.quantity_filled if self.closeOrderTicket else self.closeOrderQuantity
 
     def getUnfilledQuantity(self):
-        targetQuantity = self.getTargetQuantity()
+        if self.tradeOrder:
+            targetQuantity = self.tradeOrder.getQuantity()
+        else:
+            targetQuantity = self.getTargetQuantity()
         if self.isLongLot() and targetQuantity > self.filledOpenQuantity:
             targetQuantity = targetQuantity - self.filledOpenQuantity
         if self.isShortLot() and targetQuantity < self.filledOpenQuantity:
@@ -395,7 +370,7 @@ class LIGridBaseLot:
         profitLossPoints = self.getProfitLossPoints(currentPrice)
         return profitLossPoints * abs(self.filledOpenQuantity) * self.getSecurityMultiplier()
 
-    def getStopLossPrice(self) -> ():
+    def getStopLossPrice(self) -> tuple[float, float]:
         stopLossPrice = None
         if self.gridTrading.liquidateLossAndLimitTrading:
             stoppedLossPrices = self.gridTrading.stoppedLossPrices
@@ -420,16 +395,17 @@ class LIGridBaseLot:
                     stopLossPrice = openPrice + self.getAugmentedAmount() * self.gridLotStopLossFactor
             stopLossPrice = self.positionManager.roundSecurityPrice(stopLossPrice)
             return stopLossPrice, self.gridLotStopLossFactor
+        return None
 
-    def getMaxProfitPrice(self) -> ():
+    def getMaxProfitPrice(self) -> tuple[float, float]:
         maxProfitPrice = None
         if self.gridLotMaxProfitFactor:
             openPrice = self.filledOpenPrice
             if self.gridLotLevelPercent:
                 if self.isLongLot():
-                    maxProfitPrice = openPrice / (1 - self.getAugmentedPercent() / 100 * self.gridLotMaxProfitFactor)
+                    maxProfitPrice = openPrice * (1 + self.getAugmentedPercent() / 100 * self.gridLotMaxProfitFactor)
                 if self.isShortLot():
-                    maxProfitPrice = openPrice / (1 + self.getAugmentedPercent() / 100 * self.gridLotMaxProfitFactor)
+                    maxProfitPrice = openPrice * (1 - self.getAugmentedPercent() / 100 * self.gridLotMaxProfitFactor)
             elif self.gridLotLevelAugment:
                 if self.isLongLot():
                     maxProfitPrice = openPrice + self.getAugmentedAmount() * self.gridLotMaxProfitFactor
@@ -437,8 +413,9 @@ class LIGridBaseLot:
                     maxProfitPrice = openPrice - self.getAugmentedAmount() * self.gridLotMaxProfitFactor
             maxProfitPrice = self.positionManager.roundSecurityPrice(maxProfitPrice)
             return maxProfitPrice, self.gridLotMaxProfitFactor
+        return None
 
-    def getStopProfitPrice(self) -> ():
+    def getStopProfitPrice(self) -> tuple[float, float]:
         stopProfitPrice = None
         stopProfitFactor = self.getStopProfitFactor()
         if self.isBoostingLot() and self.gridLotBoostingDesireProfit:  # Reduce profit factor to protect the boosting profit
@@ -458,36 +435,40 @@ class LIGridBaseLot:
                     stopProfitPrice = marketPrice * (1 + self.getAugmentedPercent() / 100 * stopProfitFactor)
             stopProfitPrice = self.positionManager.roundSecurityPrice(stopProfitPrice)
             return stopProfitPrice, stopProfitFactor
+        return None
 
     def getOpenTargetPrice(self, startPrice=None):
         targetPrice = None
-        startPrice = startPrice if startPrice else self.getStartPrice()
-        if self.gridLotLevelPercent:
-            # Calculate geometric prices
-            if self.isLongLot() or self.isStartLot():
-                if self.isMomentumMode():
-                    targetPrice = startPrice * pow(1 + self.getAugmentedPercent() / 100, self.lotId)
-                elif self.isContrarianMode():
-                    targetPrice = startPrice * pow(1 - self.getAugmentedPercent() / 100, self.lotId)
-            if self.isShortLot():
-                if self.isMomentumMode():
-                    targetPrice = startPrice * pow(1 - self.getAugmentedPercent() / 100, abs(self.lotId))
-                elif self.isContrarianMode():
-                    targetPrice = startPrice * pow(1 + self.getAugmentedPercent() / 100, abs(self.lotId))
-        elif self.gridLotLevelAmount:
-            # Calculate arithmetic prices
-            if self.isLongLot() or self.isStartLot():
-                if self.isMomentumMode():
-                    targetPrice = startPrice + (self.getAugmentedAmount() * self.lotId)
-                elif self.isContrarianMode():
-                    targetPrice = startPrice - (self.getAugmentedAmount() * self.lotId)
-            if self.isShortLot():
-                if self.isMomentumMode():
-                    targetPrice = startPrice - (self.getAugmentedAmount() * abs(self.lotId))
-                elif self.isContrarianMode():
-                    targetPrice = startPrice + (self.getAugmentedAmount() * abs(self.lotId))
-        if targetPrice <= 0:
-            targetPrice = 0
+        if self.tradeOrder:
+            targetPrice = self.tradeOrder.getLimitPrice()
+        else:
+            startPrice = startPrice if startPrice else self.getStartPrice()
+            if self.gridLotLevelPercent:
+                # Calculate geometric prices
+                if self.isLongLot() or self.isStartLot():
+                    if self.isMomentumMode():
+                        targetPrice = startPrice * pow(1 + self.getAugmentedPercent() / 100, self.lotId)
+                    elif self.isContrarianMode():
+                        targetPrice = startPrice * pow(1 - self.getAugmentedPercent() / 100, self.lotId)
+                if self.isShortLot():
+                    if self.isMomentumMode():
+                        targetPrice = startPrice * pow(1 - self.getAugmentedPercent() / 100, abs(self.lotId))
+                    elif self.isContrarianMode():
+                        targetPrice = startPrice * pow(1 + self.getAugmentedPercent() / 100, abs(self.lotId))
+            elif self.gridLotLevelAmount:
+                # Calculate arithmetic prices
+                if self.isLongLot() or self.isStartLot():
+                    if self.isMomentumMode():
+                        targetPrice = startPrice + (self.getAugmentedAmount() * self.lotId)
+                    elif self.isContrarianMode():
+                        targetPrice = startPrice - (self.getAugmentedAmount() * self.lotId)
+                if self.isShortLot():
+                    if self.isMomentumMode():
+                        targetPrice = startPrice - (self.getAugmentedAmount() * abs(self.lotId))
+                    elif self.isContrarianMode():
+                        targetPrice = startPrice + (self.getAugmentedAmount() * abs(self.lotId))
+        if targetPrice <= 0.0:
+            targetPrice = 0.0
             # error(f"{self.getSymbolAlias()}: Got unexpected negative/zero open target price: {targetPrice}!")
         return self.positionManager.roundSecurityPrice(targetPrice)
 
@@ -525,41 +506,44 @@ class LIGridBaseLot:
                     targetPrice = marketPrice - (self.getAugmentedAmount() * limitFactor)
                 elif self.isContrarianMode():
                     targetPrice = marketPrice + (self.getAugmentedAmount() * limitFactor)
-        if targetPrice <= 0:
-            targetPrice = 0
+        if targetPrice <= 0.0:
+            targetPrice = 0.0
             # error(f"{self.getSymbolAlias()}: Got unexpected negative/zero open target price: {targetPrice}!")
         return self.positionManager.roundSecurityPrice(targetPrice)
 
     def getFavorOpenPrice(self):
         openPrice = self.getOpenTargetPrice()
+        filledPrice = self.filledOpenPrice
         if self.isContrarianMode() and self.gridTrading.gridOpenFromPrices:
             # Pick the favorable open price!
             if self.filledOpenPrice:
                 if self.isLongLot():
-                    openPrice = max(openPrice, self.filledOpenPrice)
+                    openPrice = max(openPrice, filledPrice)
                 if self.isShortLot():
-                    openPrice = min(openPrice, self.filledOpenPrice)
-        elif self.filledOpenPrice:
-            openPrice = self.filledOpenPrice
+                    openPrice = min(openPrice, filledPrice)
+        elif filledPrice:
+            openPrice = filledPrice
         return openPrice
 
     def getCloseTargetPrice(self):
         targetPrice = None
+        if self.tradeOrder:
+            return self.tradeOrder.stopLoss
         if self.isBuyAndHoldMode():
             return targetPrice
         openPrice = self.getFavorOpenPrice()
         if self.gridLotLevelPercent:
             if self.isLongLot() or self.isStartLot():
-                targetPrice = openPrice / (1 - self.getAugmentedPercent() / 100 * self.gridLotTakeProfitFactor)
+                targetPrice = openPrice * (1 + self.getAugmentedPercent() / 100 * self.gridLotTakeProfitFactor)
             if self.isShortLot():
-                targetPrice = openPrice / (1 + self.getAugmentedPercent() / 100 * self.gridLotTakeProfitFactor)
+                targetPrice = openPrice * (1 - self.getAugmentedPercent() / 100 * self.gridLotTakeProfitFactor)
         elif self.gridLotLevelAmount:
             if self.isLongLot() or self.isStartLot():
                 targetPrice = openPrice + self.getAugmentedAmount() * self.gridLotTakeProfitFactor
             if self.isShortLot():
                 targetPrice = openPrice - self.getAugmentedAmount() * self.gridLotTakeProfitFactor
-        if targetPrice <= 0:
-            targetPrice = 0
+        if targetPrice <= 0.0:
+            targetPrice = 0.0
             # error(f"{self.getSymbolAlias()}: Got unexpected negative/zero close target price: {targetPrice}!")
         return self.positionManager.roundSecurityPrice(targetPrice)
 
