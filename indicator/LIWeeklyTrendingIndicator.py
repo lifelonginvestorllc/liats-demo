@@ -14,25 +14,24 @@ class LIWeeklyTrendingIndicator(LIInsightIndicator):
         super().__init__(securityMonitor, positionManager, mainChart, configs)
 
         self.comboTrendingParams = configs.get(LIConfigKey.comboTrendingParams, LIDefault.comboTrendingParams)
-        self.weeklyTrendingSignals = configs.get(LIConfigKey.weeklyTrendingSignals, LIDefault.weeklyTrendingSignals)
+        self.staticTradingSignals = configs.get(LIConfigKey.staticTradingSignals, LIDefault.staticTradingSignals)
+        self.fetchTradingSignalsApi = configs.get(LIConfigKey.fetchTradingSignalsApi, LIDefault.fetchTradingSignalsApi)
 
-        if self.weeklyTrendingSignals:
-            keys = list(self.weeklyTrendingSignals.keys())
-            # values = list(self.weeklyTrendingSignals.values())
-            if (datetime.now().date() - keys[-1]).days < 5:
-                raise ValueError(f"The last date {keys[-1]} in weeklyTrendingSignals must be at least 5 days before today.")
-            for i in range(len(keys) - 1):
-                if (keys[i + 1] - keys[i]).days != 7:
-                    raise ValueError(f"The days between {keys[i]} and {keys[i + 1]} in weeklyTrendingSignals should be 7 days.")
-            # Flag dates that are NOT Monday (weekday 0) and show the closest prior Monday
-            invalidNonMondays = [(k, k - timedelta(days=k.weekday())) for k in keys if k.weekday() != 0]
-            if invalidNonMondays:
-                details = ", ".join([f"{d} -> prior Monday {m}" for d, m in invalidNonMondays])
-                raise ValueError(f"All weeklyTrendingSignals dates must be Mondays. Please correct following dates: {details}")
+        if self.staticTradingSignals and self.fetchTradingSignalsApi:
+            raise ValueError("Both staticTradingSignals and fetchTradingSignalsApi are set. Please choose only one method for providing trading signals.")
 
+        if self.fetchTradingSignalsApi:
+            endpointUrl = LIGlobal.websiteUrl + "/" + self.fetchTradingSignalsApi
+            symbolStr = self.securityMonitor.getSymbolStr()
+            endpointUrl += "?symbol=%s" % symbolStr
+            endpointUrl += "&category=WEEKLY_TREND&page=0&sort=date,desc&size=10"
+            self.staticTradingSignals = self.fetchTradingSignals(symbolStr, endpointUrl)
+
+        if self.staticTradingSignals:
+            self.validateTradingSignals()
             if isLiveMode():  # Just keep the latest 5 signals
-                for key in list(self.weeklyTrendingSignals.keys())[:-5]:
-                    del self.weeklyTrendingSignals[key]
+                for key in list(self.staticTradingSignals.keys())[:-5]:
+                    del self.staticTradingSignals[key]
 
         if LIIndicator.WEEKLY in self.comboTrendingParams:
             self.heikinAshiPlies = self.comboTrendingParams[LIIndicator.WEEKLY]
@@ -56,6 +55,47 @@ class LIWeeklyTrendingIndicator(LIInsightIndicator):
 
         if self.plotWeeklyChart:
             self.mainChart.add_series(getCandlestickSeries("Weekly", unit="$", color=Color.CYAN, z_index=-5))
+
+    def fetchTradingSignals(self, symbolStr, endpointUrl: str | Any):
+        headers = getHttpHeader(getWebApiToken())
+        log(f"{symbolStr}: Calling API endpoint {endpointUrl} with headers={headers}")
+        try:
+            response = getAlgo().download(address=endpointUrl, headers=headers)
+            log(f"{self.getSymbol().value}: Fetched trading signals: {response}.", self.verbose)
+            signals = json.loads(response)
+            signalsMap = {}
+            for signal in signals:
+                # Extract date in format "YYYY-MM-DD"
+                signalDate = datetime.strptime(signal.get('date'), '%Y-%m-%d').date()
+                # Parse the content JSON to get signalType
+                signalContent = json.loads(signal.get('content'))
+                signalTypeStr = signalContent.get('signalType')
+                signalType = LISignalType.NONE
+                if signalTypeStr == 'LONG':
+                    signalType = LISignalType.LONG
+                elif signalTypeStr == 'SHORT':
+                    signalType = LISignalType.SHORT
+                elif signalTypeStr == 'CLOSE':
+                    signalType = LISignalType.CLOSE
+                signalsMap[signalDate] = signalType
+            return dict(sorted(signalsMap.items()))
+            log(f"{symbolStr}: Converted trading signals: {self.staticTradingSignals}.", self.verbose)
+        except Exception as exc:
+            log(f"{symbolStr}: Failed to fetch trading signals: {exc}")
+
+    def validateTradingSignals(self):
+        keys = list(self.staticTradingSignals.keys())
+        # values = list(self.staticTradingSignals.values())
+        if (datetime.now().date() - keys[-1]).days < 5:
+            raise ValueError(f"The last date {keys[-1]} in weeklyTrendingSignals must be at least 5 days before today.")
+        for i in range(len(keys) - 1):
+            if (keys[i + 1] - keys[i]).days != 7:
+                raise ValueError(f"The days between {keys[i]} and {keys[i + 1]} in weeklyTrendingSignals should be 7 days.")
+        # Flag dates that are NOT Monday (weekday 0) and show the closest prior Monday
+        invalidNonMondays = [(k, k - timedelta(days=k.weekday())) for k in keys if k.weekday() != 0]
+        if invalidNonMondays:
+            details = ", ".join([f"{d} -> prior Monday {m}" for d, m in invalidNonMondays])
+            raise ValueError(f"All weeklyTrendingSignals dates must be Mondays. Please correct following dates: {details}")
 
     def resetIndicators(self, dailyHistoryCount=None, minsHistoryCount=None):
         self.isWarmedUp = False
@@ -145,7 +185,7 @@ class LIWeeklyTrendingIndicator(LIInsightIndicator):
         timestamp = getAlgoTime()
         signalType = LISignalType.NONE
         symbolValue = updated.symbol.value if updated else self.getSymbol().value
-        if self.weeklyTrendingSignals:
+        if self.staticTradingSignals:
             algoDate = timestamp.date()
             log(f"{self.getSymbol().value}: Predicting with weeklyTrendingSignals for {algoDate}, timestamp={timestamp}.", self.verbose)
             # The algorithm date is intentionally shifted back by 7 days to refer to the previous Monday's weekly signal.
@@ -154,7 +194,7 @@ class LIWeeklyTrendingIndicator(LIInsightIndicator):
             # when interpreting backtests and live trading results. This logic ensures that only fully-formed weekly signals
             # (i.e., signals based on complete weekly data) are used for trading decisions.
             algoDate -= timedelta(days=5)
-            for (key, value) in sorted(self.weeklyTrendingSignals.items()):
+            for (key, value) in sorted(self.staticTradingSignals.items()):
                 if key > algoDate:
                     break  # Found the latest signal type that is before the algoDate
                 signalType = value

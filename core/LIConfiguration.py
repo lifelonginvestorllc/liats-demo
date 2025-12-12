@@ -109,7 +109,8 @@ class LIDefault:
     candlestickSpinningTopBodyMaxRatio = 0.333
     shortToLongInverseSymbol = None
     macdIndicatorTolerance = 5  # 5 - 10
-    weeklyTrendingSignals = None  # {date(2024, 4, 1): LISignalType.SHORT, date(2024, 4, 29): LISignalType.LONG}
+    staticTradingSignals = None  # {date(2024, 4, 1): LISignalType.SHORT, date(2024, 4, 29): LISignalType.LONG}
+    fetchTradingSignalsApi = None  # https://www.lifelonginvestor.net/api/signals
     bollingerBandsParams = None  # [(300, 1), (300, 2), (300, 3, LIResolution.HOUR)]
     comboTrendingParams = None  # {"MACD": (12, 26, 5), "RSI": 14, "KDJ": (14, 3, 3), "SRSI": (14, 14, 3, 3)},
     investAmountTierFactors = None  # [4, 3, 2, 1, 1, 2, 3, 4]
@@ -282,7 +283,8 @@ class LIConfigKey:
     candlestickSpinningTopBodyMaxRatio = "candlestickSpinningTopBodyMaxRatio"  # 0.1=10%, Not Doji, but less than or equals to this percent of average body size
     shortToLongInverseSymbol = "shortToLongInverseSymbol"  # Never short, instead to long inverse symbol
     macdIndicatorTolerance = "macdIndicatorTolerance"  # MACD indicator threshold for histogram or divergence
-    weeklyTrendingSignals = "weeklyTrendingSignals"  # A map of weekly trending signals, {date(2024, 4, 1): LISignalType.SHORT, date(2024, 4, 29): LISignalType.LONG}, defined in indicator/LIWeeklyTrendingSignals.py
+    staticTradingSignals = "staticTradingSignals"  # Set static trading signals, {date(2024, 4, 1): LISignalType.SHORT, date(2024, 4, 29): LISignalType.LONG}, defined in indicator/LIWeeklyTrendingSignals.py
+    fetchTradingSignalsApi = "fetchTradingSignalsApi"  # A REST API endpoint to fetch trading signals. e.g. https://www.lifelonginvestor.net/api/signals?symbol=MNQ&page=0&size=20
     bollingerBandsParams = "bollingerBandsParams"  # A list of bollinger bands params which can specify the period of moving average, the standard deviation (the distance between middle and upper or lower bands) and resolution (daily by default).
     comboTrendingParams = "comboTrendingParams"  # Specify the params for all supported indicators in map, e.g. {"EMA": 200, "MACD": (12, 26, 5), "RSI": 14, "KDJ": (14, 3, 3), "SRSI": (14, 14, 3, 3)}
     investAmountTierFactors = "investAmountTierFactors"  # A list of factors for each tier/band, usually equals to bollingerBandsParams * 2 + 1. Trading with different invest amounts as per band.

@@ -68,6 +68,10 @@
 
 - <img src="6E-1Year-Bands-Tiers.png" alt="Define Bands and Tiers" width="1200"/>
 
+#### LIATS项目代码结构
+
+- <img src="liats-project.png" alt="Define Bands and Tiers"/>
+
 ## 交易系统通知实例
 
 - 部署通知：

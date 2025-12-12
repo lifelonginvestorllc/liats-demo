@@ -70,7 +70,7 @@ class LifelongInvestorMain(LIAlgorithm):
             # LIConfigKey.comboTrendingParams: {LIIndicator.EMA: 50},
             LIConfigKey.comboTrendingParams: {LIIndicator.WEEKLY: 1},
             # LIConfigKey.candlestickBodyTolerance: 0.5,
-            LIConfigKey.weeklyTrendingSignals: weeklyTrendingSignals[Futures.Indices.MICRO_NASDAQ_100_E_MINI],
+            LIConfigKey.staticTradingSignals: weeklyTrendingSignals[Futures.Indices.MICRO_NASDAQ_100_E_MINI],
             LIConfigKey.gridInitializeSession: True,  # Be careful!
         }
 

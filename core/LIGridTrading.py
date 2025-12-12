@@ -260,7 +260,8 @@ class LIGridTrading(LIGridBase):
             else:
                 self.manageGridTrading(forceTrade=True)  # Trigger all related actions
 
-    def onSignalTypeChanged(self, oldTradeInsight: LITradeInsight, newTradeInsight: LITradeInsight):
+    def onTradeInsightChanged(self, oldTradeInsight: LITradeInsight, newTradeInsight: LITradeInsight):
+        super().onTradeInsightChanged(oldTradeInsight, newTradeInsight)
         if self.gridSignalStartPrices:
             marketPrice = self.getMarketPrice()
             if marketPrice is None:

@@ -25,7 +25,7 @@ echo -e "\033[0;35mBacktesting ${ACCOUNT}...\033[0m"
 
 MAIN_CODE=main.py
 CONFIG_FILE=config.json
-SET_API_TOKEN=false
+SET_API_TOKEN=true
 QC_USER=llc # Use llc for backtest by default
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
@@ -49,13 +49,10 @@ if [ -n "${QC_USER}" ]; then
   source "${SCRIPT_DIR}"/login "${QC_USER}"
 fi
 
+# Set API token to access website REST API if required
 if [ "$SET_API_TOKEN" = true ]; then
-  # Set API token if setPortfolioRepute(...) is specified in main.py
-  MATCHED_LINE=$(grep -E -n "^\s*setPortfolioRepute\(.+\)\s*$" "${ACCOUNT_CONFIG}"/${MAIN_CODE})
-  if [ -n "${MATCHED_LINE}" ]; then
-    CLOUD_ID=$(grep -Ei 'cloud-id' "${ACCOUNT_CONFIG}"/${CONFIG_FILE} | grep -oEi '\d+')
-    source "${SCRIPT_DIR}"/set-api-token "${CLOUD_ID}/backtest/webApiToken" "${WEB_API_USER}" "${WEB_API_PWD}" true
-  fi
+  METADATA_KEY="global/webApiToken"
+  "${SCRIPT_DIR}"/set-api-token "${METADATA_KEY}" "${WEB_API_USER}" "${WEB_API_PWD}" true
 fi
 
 # Go back to lean home dir

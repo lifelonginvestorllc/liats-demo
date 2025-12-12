@@ -32,6 +32,7 @@ echo "Deploying/Redeploying ${ACCOUNT}..."
 
 MAIN_CODE=main.py
 CONFIG_FILE=config.json
+SET_API_TOKEN=true
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 LIVE_DIR=$(dirname "${SCRIPT_DIR}")/live
@@ -63,11 +64,10 @@ if [ -n "${QC_USER}" ]; then
   source "${SCRIPT_DIR}"/login "${QC_USER}"
 fi
 
-# Set API token if setPortfolioRepute(...) is specified in main.py
-MATCHED_LINE=$(grep -E -n "^\s*setPortfolioRepute\(.+\)\s*$" "${ACCOUNT_CONFIG}"/${MAIN_CODE})
-if [ -n "${MATCHED_LINE}" ]; then
-  CLOUD_ID=$(grep -Ei 'cloud-id' "${ACCOUNT_CONFIG}"/${CONFIG_FILE} | grep -oEi '\d+')
-  source "${SCRIPT_DIR}"/set-api-token "${CLOUD_ID}/live/webApiToken" "${WEB_API_USER}" "${WEB_API_PWD}" true
+# Set API token to access website REST API if required
+if [ "$SET_API_TOKEN" = true ]; then
+  METADATA_KEY="global/webApiToken"
+  "${SCRIPT_DIR}"/set-api-token "${METADATA_KEY}" "${WEB_API_USER}" "${WEB_API_PWD}" true
 fi
 
 # Go back to lean home dir
