@@ -74,7 +74,6 @@
 
 ### LIATS项目代码结构
 
-- <img src="liats-project.png" alt="Define Bands and Tiers"/>
 ```text
 liats/
 ├── main.py
