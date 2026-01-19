@@ -208,7 +208,7 @@ class LIBollingerBandsIndicator(LIInsightIndicator):
             timestamp = updated.end_time if updated else getAlgoTime()
         serialId = (self.tradeInsight.serialId if self.tradeInsight else 0) + 1
         tradeInsight = LITradeInsight(serialId=serialId, symbolValue=symbolValue, signalType=signalType, timestamp=timestamp)
-        log(f"{self.getSymbol().value}: Predicted trade insight: {tradeInsight}.", self.verbose)
+        log(f"{self.getSymbolAlias()}: Predicted trade insight: {tradeInsight}.", self.verbose)
         return tradeInsight
 
     def purgeRollingWindow(self):

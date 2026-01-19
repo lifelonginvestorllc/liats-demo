@@ -21,6 +21,7 @@ class LIGridBaseLot(LITradingLot):
         self.submitTrailingStopOrder = configs.get(LIConfigKey.submitTrailingStopOrder, LIDefault.submitTrailingStopOrder)
         self.updateTrailingStopPrice = configs.get(LIConfigKey.updateTrailingStopPrice, LIDefault.updateTrailingStopPrice)
 
+        self.gridLotMinAmount = configs.get(LIConfigKey.gridLotMinAmount, LIDefault.gridLotMinAmount)
         self.gridLotMinQuantity = configs.get(LIConfigKey.gridLotMinQuantity, LIDefault.gridLotMinQuantity)
         self.gridLotLevelAmount = configs.get(LIConfigKey.gridLotLevelAmount, LIDefault.gridLotLevelAmount)
         self.gridLotLevelPercent = configs.get(LIConfigKey.gridLotLevelPercent, LIDefault.gridLotLevelPercent)
@@ -348,12 +349,13 @@ class LIGridBaseLot(LITradingLot):
     def getUnfilledQuantity(self):
         if self.tradeOrder:
             targetQuantity = self.tradeOrder.getQuantity()
+            targetQuantity = targetQuantity - self.filledOpenQuantity
         else:
             targetQuantity = self.getTargetQuantity()
-        if self.isLongLot() and targetQuantity > self.filledOpenQuantity:
-            targetQuantity = targetQuantity - self.filledOpenQuantity
-        if self.isShortLot() and targetQuantity < self.filledOpenQuantity:
-            targetQuantity = targetQuantity - self.filledOpenQuantity
+            if self.isLongLot() and targetQuantity > self.filledOpenQuantity:
+                targetQuantity = targetQuantity - self.filledOpenQuantity
+            if self.isShortLot() and targetQuantity < self.filledOpenQuantity:
+                targetQuantity = targetQuantity - self.filledOpenQuantity
         return self.positionManager.roundSecuritySize(targetQuantity)
 
     def addRealizedProfitLoss(self, netProfit):

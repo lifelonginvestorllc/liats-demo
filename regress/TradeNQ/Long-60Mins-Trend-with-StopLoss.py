@@ -57,24 +57,24 @@ class LifelongInvestorMain(LIAlgorithm):
 ┌────────────────────────────┬─────────────────┬─────────────────────────────┬────────────────┐
 │ Statistic                  │ Value           │ Statistic                   │ Value          │
 ├────────────────────────────┼─────────────────┼─────────────────────────────┼────────────────┤
-│ Equity                     │ $650,096.80     │ Fees                        │ -$103.20       │
-│ Holdings                   │ $0.00           │ Net Profit                  │ $150,096.80    │
-│ Probabilistic Sharpe Ratio │ 45.466%         │ Return                      │ 30.02 %        │
-│ Unrealized                 │ $0.00           │ Volume                      │ $19,561,480.00 │
+│ Equity                     │ $648,901.50     │ Fees                        │ -$86.00        │
+│ Holdings                   │ $0.00           │ Net Profit                  │ $148,901.50    │
+│ Probabilistic Sharpe Ratio │ 44.289%         │ Return                      │ 29.78 %        │
+│ Unrealized                 │ $0.00           │ Volume                      │ $17,927,157.50 │
 ├────────────────────────────┼─────────────────┼─────────────────────────────┼────────────────┤
-│ Total Orders               │ 38              │ Average Win                 │ 7.26%          │
-│ Average Loss               │ -7.20%          │ Compounding Annual Return   │ 42.789%        │
-│ Drawdown                   │ 14.700%         │ Expectancy                  │ 0.507          │
-│ Start Equity               │ 500000          │ End Equity                  │ 650096.8       │
-│ Net Profit                 │ 30.019%         │ Sharpe Ratio                │ 0.808          │
-│ Sortino Ratio              │ 0.84            │ Probabilistic Sharpe Ratio  │ 45.466%        │
+│ Total Orders               │ 36              │ Average Win                 │ 7.26%          │
+│ Average Loss               │ -7.36%          │ Compounding Annual Return   │ 42.433%        │
+│ Drawdown                   │ 15.900%         │ Expectancy                  │ 0.490          │
+│ Start Equity               │ 500000          │ End Equity                  │ 648901.5       │
+│ Net Profit                 │ 29.780%         │ Sharpe Ratio                │ 0.783          │
+│ Sortino Ratio              │ 0.8             │ Probabilistic Sharpe Ratio  │ 44.289%        │
 │ Loss Rate                  │ 25%             │ Win Rate                    │ 75%            │
-│ Profit-Loss Ratio          │ 1.01            │ Alpha                       │ 0              │
-│ Beta                       │ 0               │ Annual Standard Deviation   │ 0.275          │
-│ Annual Variance            │ 0.076           │ Information Ratio           │ 1.007          │
-│ Tracking Error             │ 0.275           │ Treynor Ratio               │ 0              │
-│ Total Fees                 │ $103.20         │ Estimated Strategy Capacity │ $530000000.00  │
-│ Lowest Capacity Asset      │ NQ YQYHC5L1GPA9 │ Portfolio Turnover          │ 11.40%         │
+│ Profit-Loss Ratio          │ 0.99            │ Alpha                       │ 0              │
+│ Beta                       │ 0               │ Annual Standard Deviation   │ 0.286          │
+│ Annual Variance            │ 0.082           │ Information Ratio           │ 0.975          │
+│ Tracking Error             │ 0.286           │ Treynor Ratio               │ 0              │
+│ Total Fees                 │ $86.00          │ Estimated Strategy Capacity │ $430000000.00  │
+│ Lowest Capacity Asset      │ NQ YQYHC5L1GPA9 │ Portfolio Turnover          │ 10.35%         │
 │ Drawdown Recovery          │ 49              │                             │                │
 └────────────────────────────┴─────────────────┴─────────────────────────────┴────────────────┘
 """

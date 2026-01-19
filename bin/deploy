@@ -35,9 +35,9 @@ CONFIG_FILE=config.json
 SET_API_TOKEN=true
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
-LIVE_DIR=$(dirname "${SCRIPT_DIR}")/live
-PROJECT_DIR=$(dirname "${LIVE_DIR}")
-ACCOUNT_CONFIG="${LIVE_DIR}"/${ACCOUNT}
+ACCOUNTS_DIR=$(dirname "${SCRIPT_DIR}")/accounts
+PROJECT_DIR=$(dirname "${ACCOUNTS_DIR}")
+ACCOUNT_CONFIG="${ACCOUNTS_DIR}"/${ACCOUNT}
 ACCOUNT_PROJECT="$(dirname "${PROJECT_DIR}")"/${ACCOUNT}
 
 if [ ! -d "${ACCOUNT_CONFIG}" ]; then
@@ -73,7 +73,7 @@ fi
 # Go back to lean home dir
 cd "${PROJECT_DIR}"/.. || exit
 
-# Sync to live project dir
+# Sync to accounts project dir
 rsync -a --delete --exclude-from="${PROJECT_DIR}"/.leanignore "${PROJECT_DIR}"/ "${ACCOUNT_PROJECT}"/
 
 # Copy over main/config files

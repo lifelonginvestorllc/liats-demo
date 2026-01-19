@@ -3,9 +3,9 @@
 
 ## Project Structure
 
-- Packages: core, indicator, equity, future, forex, option, crypto...
+- Packages: core, equity, future, forex, option, crypto, indicator...
+- The accounts folder includes all live/test accounts' config and strategies
 - The bin folder includes variety of scripts to deploy and maintain the project
-- The live folder includes all live accounts' config and strategies
 - The docs folder includes guidelines, baseline, mindset and notes
 - The regress folder includes regression testing results
 
@@ -169,10 +169,10 @@ fi
 
 ### Create a new account LifelongHedge
 
-- Copy live/LifelongPaper to live/LifelongHedge
+- Copy accounts/LifelongPaper to accounts/LifelongHedge
 
 ```
-% cp -r live/LifelongPaper live/LifelongHedge
+% cp -r accounts/LifelongPaper accounts/LifelongHedge
 ```
 
 - Update main.py accordingly
@@ -199,7 +199,7 @@ PASSWORD='******'
 
 ### Deploy for Live Trading
 
-- Adjust settings live/LifelongHedge/main.py whenever needed
+- Adjust settings accounts/LifelongHedge/main.py whenever needed
 
 - Run deployment script as `deploy LifelongHedge`
 - Run recreate script as `recreate LifelongHedge`

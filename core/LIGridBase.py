@@ -60,6 +60,11 @@ def swapGridLots(lotX: LIGridTradingLot, lotY: LIGridTradingLot):
     lotX.lotId = lotY.lotId
     lotY.lotId = temp
 
+    # TEST: It performs worse with this change!
+    # temp = lotX.openOrderTicket
+    # lotX.openOrderTicket = lotY.openOrderTicket
+    # lotY.openOrderTicket = temp
+
 
 class LIGridBase(LITrading):
     def __init__(self, symbolStr, securityType, investAmount, gridMode, **configs):
@@ -78,6 +83,7 @@ class LIGridBase(LITrading):
         self.gridFixedStartPrices = configs.get(LIConfigKey.gridFixedStartPrices, LIDefault.gridFixedStartPrices)
         self.gridSignalStartPrices = configs.get(LIConfigKey.gridSignalStartPrices, LIDefault.gridSignalStartPrices)
         self.gridFixedOpenFromPrices = configs.get(LIConfigKey.gridFixedOpenFromPrices, LIDefault.gridFixedOpenFromPrices)
+        self.gridResetDCABuyAndHold = configs.get(LIConfigKey.gridResetDCABuyAndHold, LIDefault.gridResetDCABuyAndHold)
         self.gridResetLotsMetadata = configs.get(LIConfigKey.gridResetLotsMetadata, LIDefault.gridResetLotsMetadata)
         self.gridRolloverCriteria = configs.get(LIConfigKey.gridRolloverCriteria, LIDefault.gridRolloverCriteria)
         self.gridInitializeSession = configs.get(LIConfigKey.gridInitializeSession, LIDefault.gridInitializeSession)
@@ -86,6 +92,7 @@ class LIGridBase(LITrading):
         self.gridBandingOpenFromPrices = configs.get(LIConfigKey.gridBandingOpenFromPrices, LIDefault.gridBandingOpenFromPrices)
         self.gridBandingLimitStartPrices = configs.get(LIConfigKey.gridBandingLimitStartPrices, LIDefault.gridBandingLimitStartPrices)
 
+        self.gridLotMinAmount = configs.get(LIConfigKey.gridLotMinAmount, LIDefault.gridLotMinAmount)
         self.gridLotMinQuantity = configs.get(LIConfigKey.gridLotMinQuantity, LIDefault.gridLotMinQuantity)
         self.gridLotLevelAmount = configs.get(LIConfigKey.gridLotLevelAmount, LIDefault.gridLotLevelAmount)
         self.gridLotLevelPercent = configs.get(LIConfigKey.gridLotLevelPercent, LIDefault.gridLotLevelPercent)
@@ -172,10 +179,10 @@ class LIGridBase(LITrading):
                 terminate(f"Please specify {LIConfigKey.gridHedgeOverLosingLots} since {reason}!")
             if self.gridLongLots != self.gridShortLots:
                 terminate(f"Please specify the same long and short lots since {reason}!")
-        if self.isNotCommandMode() and self.investAmount.maxHolding and not self.gridLotMinQuantity:
-            terminate(f"Please specify {LIConfigKey.gridLotMinQuantity} since maxHolding={self.investAmount.maxHolding}!")
-        if self.isNotCommandMode() and self.investAmount.maxCapital and not self.gridLotMinQuantity:
-            terminate(f"Please specify {LIConfigKey.gridLotMinQuantity} since maxCapital={self.investAmount.maxCapital}!")
+        if self.investAmount.maxHolding and not (self.gridLotMinAmount or self.gridLotMinQuantity):
+            terminate(f"Please specify {LIConfigKey.gridLotMinAmount} or {LIConfigKey.gridLotMinQuantity} since maxHolding={self.investAmount.maxHolding}!")
+        if self.investAmount.maxCapital and not (self.gridLotMinAmount or self.gridLotMinQuantity):
+            terminate(f"Please specify {LIConfigKey.gridLotMinAmount} or {LIConfigKey.gridLotMinQuantity} since maxCapital={self.investAmount.maxCapital}!")
         if isNotLiveMode() and self.gridInitializeSession is None:
             terminate(f"Please specify {LIConfigKey.gridInitializeSession} explicitly for backtest mode!")
 
@@ -342,7 +349,6 @@ class LIGridBase(LITrading):
         self.gridStartPrices = {}
         self.gridOpenFromPrices = {}
         self.gridBoundaryPrices = {}  # Tracking min/max reached prices
-        self.lastTradingMarketPrice = None  # Avoid using the same market price
 
         self.startLot: LIGridTradingLot = None  # The reference/starting lot with #0
         self.transferOrderId = 0  # Decrease with negative id
@@ -717,13 +723,6 @@ class LIGridBase(LITrading):
     def getGridTradingSide(self):
         return self.getGridLongSide() if self.getInvestedQuantity() >= 0 else self.getGridShortSide()
 
-    def countOrderTickets(self):
-        orderTicketsCount = 0
-        for orderTicket in self.positionManager.getActiveOrderTickets():
-            if isOrderTicketUpdatable(orderTicket):
-                orderTicketsCount += 1
-        return orderTicketsCount
-
     def countOpenOrders(self, peerLot=None):
         openOrdersCount = 0
         lot = self.getTradeLot()
@@ -830,6 +829,18 @@ class LIGridBase(LITrading):
             self.insightIndicators[symbolKey] = insightIndicator
         return insightIndicator
 
+    def cancelExpiredCloseOrder(self):
+        if self.closeOrderTicket and abs(self.closeOrderTicket.quantity) > abs(self.getInvestedQuantity()):
+            if isOrderTicketUpdatable(self.closeOrderTicket):
+                tagLog = f"{self.gridMode}: Cancel {LITradeType.CLOSING} order as not holding enough positions! tag=[{self.closeOrderTicket.tag}]."
+                if self.positionManager.cancelOrder(self.closeOrderTicket, tagLog):
+                    self.closeOrderTicket = None
+                    self.trailingStopPrice = None
+                    self.closeOrderUpdatedTimes = 0
+                    log(f"{self.getSymbolAlias()}@{tagLog}")
+                    return True
+        return False
+
     def initializeMetadata(self):
         # Map of grid trading metadata: {key1: value2, key2: value2}
         self.gridMetadataKey = self.getMetadataKeyPrefix() + "/gridMetadata"
@@ -840,6 +851,8 @@ class LIGridBase(LITrading):
             self.deleteGridMetadata()
         if self.gridResetLotsMetadata:
             self.resetLotsMetadataAndQuit()
+        if self.gridResetDCABuyAndHold:
+            self.resetDCABuyAndHoldAndQuit()
 
         self.gridMetadata: dict = readMetadata(self.gridMetadataKey, "dict", default={})
         self.gridLotsMetadata: dict = readMetadata(self.gridLotsMetadataKey, "dict", default={})
@@ -868,11 +881,11 @@ class LIGridBase(LITrading):
         self.gridMetadata[LIMetadataKey.gridMode] = self.gridMode
         self.gridMetadata[LIMetadataKey.sessionId] = self.sessionId
         self.gridMetadata[LIMetadataKey.startPrices] = self.gridStartPrices
-        self.gridMetadata[LIMetadataKey.investedQuantity] = self.getInvestedQuantity()
         self.gridMetadata[LIMetadataKey.stoppedLossPrices] = self.stoppedLossPrices
         self.gridMetadata[LIMetadataKey.closedTradesCount] = self.closedTradesCount
         self.gridMetadata[LIMetadataKey.realizedProfitLoss] = self.realizedProfitLoss
         self.gridMetadata[LIMetadataKey.rolloverProfitLoss] = self.rolloverProfitLoss
+        self.gridMetadata[LIMetadataKey.settledOpenQuantity] = self.settledOpenQuantity
         self.overallMaxProfitLoss = (max(self.overallMaxProfitLoss[0], self.getMaxProfitLossAmount()),
                                      min(self.overallMaxProfitLoss[1], self.getMaxProfitLossAmount()))
         self.gridMetadata[LIMetadataKey.overallMaxProfitLoss] = self.overallMaxProfitLoss
@@ -913,12 +926,13 @@ class LIGridBase(LITrading):
         self.closedTradesCount = self.gridMetadata.get(LIMetadataKey.closedTradesCount, 0)
         self.realizedProfitLoss = self.gridMetadata.get(LIMetadataKey.realizedProfitLoss, 0.0)
         self.rolloverProfitLoss = self.gridMetadata.get(LIMetadataKey.rolloverProfitLoss, 0.0)
+        self.settledOpenQuantity = self.gridMetadata.get(LIMetadataKey.settledOpenQuantity, 0)
         self.overallMaxProfitLoss = self.gridMetadata.get(LIMetadataKey.overallMaxProfitLoss, (0.0, 0.0))
         if self.isBuyAndHoldMode():
             self.dcaMaxStartPrice = self.gridMetadata.get(LIMetadataKey.dcaMaxStartPrice, 0)
             self.dcaHoldingQuantity = self.gridMetadata.get(LIMetadataKey.dcaHoldingQuantity, 0)
             self.dcaLastInvestedDate = self.gridMetadata.get(LIMetadataKey.dcaLastInvestedDate, None)
-            self.dcaLastInvestedDate = datetime.strptime(self.dcaLastInvestedDate, LIGlobal.timestampFormat) if self.dcaLastInvestedDate else getAlgo().time
+            self.dcaLastInvestedDate = datetime.strptime(self.dcaLastInvestedDate, LIGlobal.timestampFormat) if self.dcaLastInvestedDate else getAlgoTime()
         if self.bollingerBandsIndicator:
             self.startBandName = self.gridMetadata.get(LIMetadataKey.startBandName, None)
             self.tradingTierName = self.gridMetadata.get(LIMetadataKey.tradingTierName, None)
@@ -948,6 +962,20 @@ class LIGridBase(LITrading):
             notify(f"{self.getNotifyPrefix()}: Quit algorithm after applied the settings: {settings}, please remove it and redeploy!")
             self.saveMetadataAtEnd = False
             getAlgo().quit("Quit algorithm on RESET LOTS METADATA!")
+        else:
+            notify(f"{self.getNotifyPrefix()}: Applied the settings: {settings}!")
+
+    def resetDCABuyAndHoldAndQuit(self):
+        settings = f"{LIConfigKey.gridResetDCABuyAndHold}={self.gridResetDCABuyAndHold}"
+        self.dcaMaxStartPrice = self.getMarketPrice()
+        self.dcaHoldingQuantity = self.getInvestedQuantity()
+        self.storeGridMetadata(logging=True)
+        self.gridLotsMetadata = {}
+        deleteMetadata(self.gridLotsMetadataKey, logging=True)
+        if isLiveMode():  # Avoid auto redeploy (crash/reboot) to reset start prices repeatedly!
+            notify(f"{self.getNotifyPrefix()}: Quit algorithm after applied the settings: {settings}, please remove it and redeploy!")
+            self.saveMetadataAtEnd = False
+            getAlgo().quit("Quit algorithm on RESET DCA BUY AND HOLD!")
         else:
             notify(f"{self.getNotifyPrefix()}: Applied the settings: {settings}!")
 
@@ -1011,14 +1039,17 @@ class LIGridBase(LITrading):
         elif self.dcaMaxStartPrice < startPrice:
             openingQuantity = self.getOpeningQuantity()
             if openingQuantity > 0:
-                notify(f"{self.getNotifyPrefix()}: Restart grid session upon getting a higher start price from {self.dcaMaxStartPrice} to {startPrice}, "
-                       f"and add openingQuantity={openingQuantity} into dcaHoldingQuantity={self.dcaHoldingQuantity}, "
+                notify(f"{self.getNotifyPrefix()}: Reset grid trading upon getting a higher start price from {self.dcaMaxStartPrice} to {startPrice}, "
+                       f"and consolidate openingQuantity={openingQuantity} into dcaHoldingQuantity={self.dcaHoldingQuantity}, "
                        f"dcaLastInvestedDate={printFullTime(self.dcaLastInvestedDate)}.")
                 self.dcaMaxStartPrice = startPrice
                 self.dcaHoldingQuantity = self.getInvestedQuantity()
-                self.restartGridSession(reason="Getting a higher start price")
+                self.restartTradingLots(reason="Getting a higher start price")
+                self.storeGridMetadata(logging=True)
+                self.cancelActiveOrders()
+                self.manageGridTrading()
         # Check whether it's time to fill a regular investment
-        algoTime = bar.end_time if bar else getAlgo().time
+        algoTime = bar.end_time if bar else getAlgoTime()
         if isActiveTradingTime(algoTime) and (self.getInvestedQuantity() == 0 or (self.dcaLastInvestedDate + self.getPeriodicityTimedelta()) < algoTime):
             targetQuantity = self.dcaInvestCapital / self.getMarketPrice(bar) if self.dcaInvestCapital else self.dcaInvestQuantity
             targetQuantity = self.positionManager.roundSecuritySize(targetQuantity)

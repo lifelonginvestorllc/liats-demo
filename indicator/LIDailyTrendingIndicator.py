@@ -61,13 +61,13 @@ class LIDailyTrendingIndicator(LIInsightIndicator):
         barsCount = 0
         for bar in bars:
             barsCount += 1
-            log(f"{self.getSymbol().value}: Warming up daily trending indicator with {bar.period} history bar #{barsCount}: "
+            log(f"{self.getSymbolAlias()}: Warming up daily trending indicator with {bar.period} history bar #{barsCount}: "
                 f"start: {bar.time} end: {bar.end_time} {bar}.", self.verbose)
             self.dataConsolidator.update(bar)
         self.isWarmedUp = True
         if self.lastBar:
             self.updateIndicators(self.lastBar)
-        log(f"{self.getSymbol().value}: Reset daily trending indicator with totalPeriods={totalPeriods}({str(resolution)}), "
+        log(f"{self.getSymbolAlias()}: Reset daily trending indicator with totalPeriods={totalPeriods}({str(resolution)}), "
             f"updated with {barsCount} history trade bars, windowSize={self.candlestickRollingWindow.size()}.")
 
     def updateIndicators(self, bar: Bar):
@@ -78,14 +78,8 @@ class LIDailyTrendingIndicator(LIInsightIndicator):
         self.candlestickRollingWindow.append(LICandlestick(bar, self.configs))
 
         tradeInsight = self.predictTradeInsight(bar)
-        self.notifyTradeInsight(tradeInsight)
 
-    def notifyTradeInsight(self, tradeInsight: LITradeInsight):
-        if tradeInsight.signalType != LISignalType.NONE:
-            self.tradeInsight = tradeInsight
-            # Notify downstream listeners for trading
-            for listener in self.tradeInsightListeners:
-                listener.onEmitTradeInsight(self.tradeInsight)
+        self.publishTradeInsight(tradeInsight)
 
     def onSecurityChanged(self, removedSecurity: Security):
         if removedSecurity is None:
@@ -129,7 +123,7 @@ class LIDailyTrendingIndicator(LIInsightIndicator):
         symbolValue = updated.symbol.value if updated else self.getSymbol().value
         timestamp = updated.end_time if updated else timestamp
         candlestick = self.candlestickRollingWindow.candlestick()
-        log(f"{self.getSymbol().value}: Predicting with dailyTrendingIndicator for {timestamp}, barStartTime={updated.time}, "
+        log(f"{self.getSymbolAlias()}: Predicting with dailyTrendingIndicator for {timestamp}, barStartTime={updated.time}, "
             f"barEndTime={updated.end_time}, barBody={candlestick.body()}, algoTime={getAlgoTime()}.", self.verbose)
         if candlestick.isUp():
             signalType = LISignalType.LONG
@@ -143,5 +137,5 @@ class LIDailyTrendingIndicator(LIInsightIndicator):
             signalType = LISignalType.SHORT
         serialId = (self.tradeInsight.serialId if self.tradeInsight else 0) + 1
         tradeInsight = LITradeInsight(serialId=serialId, symbolValue=symbolValue, signalType=signalType, timestamp=timestamp)
-        log(f"{self.getSymbol().value}: Predicted trade insight: {tradeInsight}.", self.verbose)
+        log(f"{self.getSymbolAlias()}: Predicted trade insight: {tradeInsight}.", self.verbose)
         return tradeInsight

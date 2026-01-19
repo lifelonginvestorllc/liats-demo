@@ -27,4 +27,4 @@ class LifelongInvestorMain(LIAlgorithm):
         if self.live_mode:
             terminate(f"This project is for backtest only!")
 
-    '''Please use accounts under the live directory to backtest or deploy!'''
+    '''Please use accounts under the accounts directory to backtest or deploy!'''

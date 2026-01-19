@@ -124,6 +124,9 @@ class LIComboTrendingIndicator(LIInsightIndicator):
             self.stochasticChart.add_series(getSeries("upper", color=Color.GRAY, index=1, z_index=-11))
             self.stochasticChart.add_series(getSeries("lower", color=Color.GRAY, index=1, z_index=-12))
 
+        if self.trendingIndicator:
+            self.trendingIndicator.subscribeTradeInsight(self)
+
         # To be called in onSecurityChanged()
         # self.resetIndicators(None, None)
 
@@ -174,7 +177,7 @@ class LIComboTrendingIndicator(LIInsightIndicator):
         self.isWarmedUp = True
         if self.lastBar:
             self.updateIndicators(self.lastBar)
-        log(f"{self.getSymbol().value}: Reset combo trending indicator with totalPeriods={totalPeriods}({str(resolution)}), "
+        log(f"{self.getSymbolAlias()}: Reset combo trending indicator with totalPeriods={totalPeriods}({str(resolution)}), "
             f"updated with {barsCount} history trade bars.")
 
     def onSecurityChanged(self, removedSecurity: Security):
@@ -209,6 +212,10 @@ class LIComboTrendingIndicator(LIInsightIndicator):
         else:
             self.updateIndicators(bar)
 
+    # Could be triggered by any children indicators
+    def onEmitTradeInsight(self, tradeInsight: LITradeInsight):
+        self.publishTradeInsight(tradeInsight)
+
     def updateIndicators(self, bar: Bar):
         if self.rangeATR:
             if self.positionManager.isExchangeOpen():  # Avoid using extend data bar streaming!
@@ -231,13 +238,8 @@ class LIComboTrendingIndicator(LIInsightIndicator):
 
         tradeInsight = self.predictTradeInsight(bar)
         if tradeInsight.signalType != LISignalType.NONE:
-            cachedInsight = self.tradeInsight
-            self.tradeInsight = tradeInsight
-            # Notify downstream listeners for trading signal changed
-            for listener in self.tradeInsightListeners:
-                listener.onEmitTradeInsight(self.tradeInsight)
             # Update charts if trade signal changed
-            if cachedInsight.signalType != tradeInsight.signalType:
+            if self.tradeInsight.signalType != tradeInsight.signalType:
                 if tradeInsight.isLongSignal():
                     plot(self.mainChart.name, LISignalType.LONG, self.securityMonitor.getMarketPrice())
                 elif tradeInsight.isShortSignal():
@@ -245,9 +247,11 @@ class LIComboTrendingIndicator(LIInsightIndicator):
                 elif tradeInsight.isCloseSignal():
                     plot(self.mainChart.name, LISignalType.CLOSE, self.securityMonitor.getMarketPrice())
 
+        self.publishTradeInsight(tradeInsight)
+
     def plotIndicatorCharts(self, bar: Bar):
         if LIDefault.verbose:
-            log(f"{self.getSymbol().value}: Plot indicator charts for period={bar.period}, endTime={bar.end_time}, {bar}")
+            log(f"{self.getSymbolAlias()}: Plot indicator charts for period={bar.period}, endTime={bar.end_time}, {bar}")
         plot(self.mainChart.name, f"{self.indicatorPeriod[1]}Price", bar.close if self.trendingIndicator else bar)
         if self.addVolumeSeries:
             plot(self.mainChart.name, "Volume", bar.volume)

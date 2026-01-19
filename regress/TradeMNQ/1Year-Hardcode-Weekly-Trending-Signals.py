@@ -27,50 +27,50 @@ class LifelongInvestorMain(LIAlgorithm):
         amplifier = 2  # Amplify invest amount by n times!
         configs = {
             LIConfigKey.aliasName: "NasdaqTrend",
-            # LIConfigKey.verbose: True,
-            # LIConfigKey.monitorPeriod: (5, LIResolution.MINUTE),  # Not always better!
+            LIConfigKey.verbose: True,
+            # LIConfigKey.skipWeekendDays: True,
+            # LIConfigKey.extendedMarketHours: False,
             LIConfigKey.monitorPeriod: (1, LIResolution.HOUR),
+            # LIConfigKey.monitorPeriod: (5, LIResolution.MINUTE),  # Not always better!
             LIConfigKey.indicatorPeriod: (1, LIResolution.DAY),
             # LIConfigKey.marketBias: LIMarketBias.BEARISH,
             # LIConfigKey.marketBias: LIMarketBias.BULLISH,
-            # LIConfigKey.extendedMarketHours: True,
-            # LIConfigKey.extendDataBarStream: True,
-            # LIConfigKey.openWithMarketOrderType: False,
             # LIConfigKey.closeWithMarketOrderType: False,
             # LIConfigKey.closeWithStopOrderType: True,
-            # LIConfigKey.plotDefaultChart: False,  # Not plot Price and Filled
-            # LIConfigKey.gridHeikinAshiPlies: 1, # Performs better without HeikinAshi
             # LIConfigKey.enableLimitMarketOrder: True,
-            # LIConfigKey.gridNoMoreOpenOrders: True,
-            # LIConfigKey.disableBuyingPowerModel: True,
-            LIConfigKey.liquidateOnStopLossAmount: 10_000 * amplifier,  # Better for volatile market
+            # LIConfigKey.liquidateBaselinePrice: 25_000,
+            # LIConfigKey.liquidateOnStopLossAmount: 20_000 * amplifier,  # Double it if only Long!
+            LIConfigKey.liquidateOnStopLossAmount: 10_000 * amplifier,
+            # LIConfigKey.flipSignalAtLiquidateFactor: 0.5,
+            # LIConfigKey.liquidateLossAndLimitTrading: True,
             LIConfigKey.liquidateLossAndRestartTrading: True,
+            LIConfigKey.liquidateLossAndBackfillEquity: "TECL",
             LIConfigKey.liquidateOnTakeProfitAmount: 10_000 * amplifier,  # Better for volatile market
-            LIConfigKey.gridLongLots: 10,  # 10
-            LIConfigKey.gridShortLots: 10,  # 10
+            # LIConfigKey.gridHeikinAshiPlies: 1, # Performs better without HeikinAshi
+            # LIConfigKey.gridNoMoreOpenOrders: True,
+            # LIConfigKey.gridNoMoreCloseOrders: True,
+            LIConfigKey.gridLongLots: 10,
+            LIConfigKey.gridShortLots: 10,
             LIConfigKey.gridLotLevelPercent: 0.60,
             LIConfigKey.gridLotLevelAugment: 0.015,  # Perform better in a long run with volatile market
             LIConfigKey.gridLotStopLossFactor: 11,
             LIConfigKey.gridLotStopProfitFactors: (0.5, 2),
-            # LIConfigKey.gridLotPauseAfterStopLoss: True,
+            LIConfigKey.gridLotPauseAfterStopLoss: True,
             LIConfigKey.gridCancelOrdersAfterClosed: True,
             LIConfigKey.gridTrailingOpenPriceFactor: 1.0,  # Enable for bullish market only to avoid acquiring too many open positions!
-            # LIConfigKey.gridLotStopProfitFactors: (0.5, 1),
-            # LIConfigKey.gridLotPauseAfterProfit: True, # Test out why it's better
-            # LIConfigKey.gridLotPauseAfterStopLoss: True, # Test out why it's better
-            # LIConfigKey.gridLotCloseUponTradeInsight: True,
-            # LIConfigKey.gridLotOpenUponTradeInsight: True,
             # LIConfigKey.gridRestartIfAllLotsPaused: False,
-            # LIConfigKey.gridCancelOrdersAfterClosed: True,
             # LIConfigKey.gridCloseCounterpartLots: False,
-            # LIConfigKey.gridRealignOpenPositions: True,
             # LIConfigKey.gridFixLeakingPositions: True,
             # LIConfigKey.gridResetLotsMetadata: True,
             LIConfigKey.heikinAshiPlies: 3,  # Better with EMA, no impact to WEEKLY
             # LIConfigKey.comboTrendingParams: {LIIndicator.EMA: 50},
             LIConfigKey.comboTrendingParams: {LIIndicator.WEEKLY: 1},
+            # LIConfigKey.comboTrendingParams: {LIIndicator.DAILY: 1},
             # LIConfigKey.candlestickBodyTolerance: 0.5,
-            LIConfigKey.staticTradingSignals: weeklyTrendingSignals[Futures.Indices.MICRO_NASDAQ_100_E_MINI],
+            # LIConfigKey.staticTrendingSignals: weeklyTrendingSignals[Futures.Indices.MICRO_NASDAQ_100_E_MINI],
+            LIConfigKey.pullTrendingSignalsApi: "api/signals",
+            # LIConfigKey.pullTrendingSignalsApi: "api/signals",
+            # LIConfigKey.useClosedTrendingSignal: False,
             LIConfigKey.gridInitializeSession: True,  # Be careful!
         }
 
@@ -82,24 +82,24 @@ class LifelongInvestorMain(LIAlgorithm):
 ┌────────────────────────────┬──────────────────┬─────────────────────────────┬────────────────┐
 │ Statistic                  │ Value            │ Statistic                   │ Value          │
 ├────────────────────────────┼──────────────────┼─────────────────────────────┼────────────────┤
-│ Equity                     │ $385,445.60      │ Fees                        │ -$744.42       │
-│ Holdings                   │ $658,077.00      │ Net Profit                  │ $182,252.29    │
-│ Probabilistic Sharpe Ratio │ 61.922%          │ Return                      │ 92.72 %        │
-│ Unrealized                 │ $3,193.31        │ Volume                      │ $53,312,910.00 │
+│ Equity                     │ $437,173.46      │ Fees                        │ -$660.06       │
+│ Holdings                   │ $658,077.00      │ Net Profit                  │ $235,789.14    │
+│ Probabilistic Sharpe Ratio │ 77.858%          │ Return                      │ 118.59 %       │
+│ Unrealized                 │ $1,384.32        │ Volume                      │ $48,833,912.50 │
 ├────────────────────────────┼──────────────────┼─────────────────────────────┼────────────────┤
-│ Total Orders               │ 514              │ Average Win                 │ 1.35%          │
-│ Average Loss               │ -1.65%           │ Compounding Annual Return   │ 92.378%        │
-│ Drawdown                   │ 37.000%          │ Expectancy                  │ 0.261          │
-│ Start Equity               │ 200000           │ End Equity                  │ 385445.6       │
-│ Net Profit                 │ 92.723%          │ Sharpe Ratio                │ 1.537          │
-│ Sortino Ratio              │ 1.768            │ Probabilistic Sharpe Ratio  │ 61.922%        │
-│ Loss Rate                  │ 31%              │ Win Rate                    │ 69%            │
-│ Profit-Loss Ratio          │ 0.82             │ Alpha                       │ 0              │
-│ Beta                       │ 0                │ Annual Standard Deviation   │ 0.44           │
-│ Annual Variance            │ 0.193            │ Information Ratio           │ 1.662          │
-│ Tracking Error             │ 0.44             │ Treynor Ratio               │ 0              │
-│ Total Fees                 │ $744.42          │ Estimated Strategy Capacity │ $440000000.00  │
-│ Lowest Capacity Asset      │ MNQ YVXOP65RE0HT │ Portfolio Turnover          │ 67.05%         │
-│ Drawdown Recovery          │ 104              │                             │                │
+│ Total Orders               │ 495              │ Average Win                 │ 1.26%          │
+│ Average Loss               │ -1.09%           │ Compounding Annual Return   │ 118.120%       │
+│ Drawdown                   │ 20.300%          │ Expectancy                  │ 0.465          │
+│ Start Equity               │ 200000           │ End Equity                  │ 437173.46      │
+│ Net Profit                 │ 118.587%         │ Sharpe Ratio                │ 2.115          │
+│ Sortino Ratio              │ 2.311            │ Probabilistic Sharpe Ratio  │ 77.858%        │
+│ Loss Rate                  │ 32%              │ Win Rate                    │ 68%            │
+│ Profit-Loss Ratio          │ 1.16             │ Alpha                       │ 0              │
+│ Beta                       │ 0                │ Annual Standard Deviation   │ 0.37           │
+│ Annual Variance            │ 0.137            │ Information Ratio           │ 2.264          │
+│ Tracking Error             │ 0.37             │ Treynor Ratio               │ 0              │
+│ Total Fees                 │ $660.06          │ Estimated Strategy Capacity │ $1300000000.00 │
+│ Lowest Capacity Asset      │ MNQ YVXOP65RE0HT │ Portfolio Turnover          │ 51.45%         │
+│ Drawdown Recovery          │ 107              │                             │                │
 └────────────────────────────┴──────────────────┴─────────────────────────────┴────────────────┘
 """

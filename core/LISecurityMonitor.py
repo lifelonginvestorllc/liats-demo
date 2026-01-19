@@ -3,7 +3,12 @@ from core.LIConfiguration import *
 
 
 def printSecurities(securities):
-    return f"{list(map(lambda x: (cleanSymbolValue(x.symbol) + '|' + (x.expiry.strftime(LIGlobal.dateFormat) if isDerivative(x.type) and x.expiry else 'None') + '|' + str(x.volume)), securities))}"
+    return f"{list(map(lambda x: printSecurity(x), securities))}"
+
+
+def printSecurity(x: Security) -> str:
+    return cleanSymbolValue(x.symbol) + '|' + (x.expiry.strftime(LIGlobal.dateFormat) if isDerivative(x.type) and x.expiry else 'None') + '|' + str(
+        x.volume) if x else 'None'
 
 
 def printOptionSymbol(symbol: Symbol):
@@ -22,7 +27,7 @@ def printOptionContract(option: Option):
 
 def isExpiredAfterDays(expiryDate, expiryDays):
     backwardDate = roundDownTime(expiryDate - timedelta(days=expiryDays), delta=timedelta(days=1))
-    currentDate = roundDownTime(getAlgo().time, delta=timedelta(days=1))
+    currentDate = roundDownTime(getAlgoTime(), delta=timedelta(days=1))
     return backwardDate >= currentDate
 
 
@@ -255,7 +260,7 @@ class LISecurityMonitor:
                                                  resolution=self.getResolution())
             # The filter will be shared by both put and call
             if self.optionContractCode:
-                spanDays = (extractExpiryDate(self.optionContractCode) - getAlgo().time).days
+                spanDays = (extractExpiryDate(self.optionContractCode) - getAlgoTime()).days
                 strikePrice = extractStrikePrice(self.optionContractCode)
                 log(f"{self.getSymbolStrAlias()}: Use reserved option contract {self.optionContractCode}, spanDays={spanDays}, strikePrice={strikePrice}.")
                 self.security.set_filter(lambda universe: universe
@@ -451,7 +456,7 @@ class LISecurityMonitor:
             contractExpiry = roundDownTime(self.contract.expiry, delta=timedelta(days=1))
             rolloverDate = roundDownTime(self.contract.expiry - timedelta(days=(expiryDays if expiryDays else self.futureRolloverDays)),
                                          delta=timedelta(days=1))
-            currentDate = roundDownTime(getAlgo().time, delta=timedelta(days=1))
+            currentDate = roundDownTime(getAlgoTime(), delta=timedelta(days=1))
             log(f"{self.getSymbolAlias()}: contractExpiry={contractExpiry}, rolloverDate={rolloverDate}, currentDate={currentDate}.", self.verbose)
             return rolloverDate <= currentDate
         return None
@@ -462,7 +467,7 @@ class LISecurityMonitor:
         return (not getAlgo().is_warming_up and
                 (self.isTempTradable or self.forceExchangeOpen or self.getSecurity().exchange.exchange_open or
                  getAlgo().is_market_open(self.getSecurity().symbol) or
-                 getAlgo().securities[self.getSymbol()].exchange.hours.is_open(getAlgo().time, self.extendedMarketHours)))
+                 getAlgo().securities[self.getSymbol()].exchange.hours.is_open(getAlgoTime(), self.extendedMarketHours)))
 
     def enableTempTradable(self):
         self.isTempTradable = True
@@ -507,12 +512,12 @@ class LISecurityMonitor:
             if self.isContractExpired():
                 if nextSecurity is None:
                     if isLiveMode():
-                        alert(f"{self.getSymbolAlias()}: Failed to find next security, please investigate and redeploy!")
+                        alert(f"{self.getSymbolAlias()}: Failed to find next security, please investigate as it's approaching rollover date!")
                     else:
                         getAlgo().quit(f"{self.getSymbolAlias()}: Failed to find next security!")
                 elif self.contract == nextSecurity:
                     if isLiveMode():
-                        alert(f"{self.getSymbolAlias()}: The next security is the same, please investigate and redeploy!")
+                        alert(f"{self.getSymbolAlias()}: The next security is the same, please investigate as it's approaching rollover date!")
                     else:
                         getAlgo().quit(f"{self.getSymbolAlias()}: The next security is the same!")
                 else:
@@ -533,13 +538,13 @@ class LISecurityMonitor:
         resolutionTimedelta = getResolutionTimedelta(self.monitorPeriod[1])
         nextUpdateTime = self.latestDataBar.end_time + resolutionTimedelta * self.monitorPeriod[0]
         # log(f"latestDataBar: {self.latestDataBar} endTime: {self.latestDataBar.end_time}, nextUpdateTime={nextUpdateTime}")
-        if getAlgo().time <= nextUpdateTime:
+        if getAlgoTime() <= nextUpdateTime:
             # log(f"{self.getSymbolAlias()}: The data consolidator is in sync with market data stream!")
             return  # Abort as no need to update yet!
 
         dataBar = None
         isFakedBar = False
-        barEndTime = getAlgo().time - resolutionTimedelta
+        barEndTime = getAlgoTime() - resolutionTimedelta
         if self.fetchHistoryBarData:
             totalPeriods = 10
             bars = self.getHistoryBars(totalPeriods)
@@ -584,7 +589,7 @@ class LISecurityMonitor:
             self.isDayOpenWithGap = False
             self.marketClosePrice = bar.close
 
-        if isActiveMarketTime(getAlgo().time):
+        if isActiveMarketTime(getAlgoTime()):
             if bar.high > self.dayHighPrice:
                 self.dayHighPrice = bar.high
                 for (priority, listener) in self.dayHighBreachEventListeners:  # Notify day high breach event
@@ -606,7 +611,7 @@ class LISecurityMonitor:
 
     def searchOptionContract(self, contractCode):
         for option in getAlgo().option_chain(self.security.symbol):
-            log(f"{self.getSymbolStrAlias()}: Search option contract: {option.symbol}")
+            log(f"{self.getSymbolStrAlias()}: Search option contract: {option.symbol}.")
             if contractCode == cleanSymbolValue(option.symbol):
                 return option
         return None
@@ -624,10 +629,10 @@ class LISecurityMonitor:
                     [x for x in securities if x.expiry == latestExpiry and x.right == OptionRight.CALL and x.underlying.price < x.strike_price],
                     key=lambda x: x.strike_price, reverse=False)[self.optionContractOTMLevel:self.optionContractOTMLevel + 2]
             if len(securities) == 0:
-                log(f"{self.getSymbolStrAlias()}: Not found any matched option contracts in added securities: {printSecurities(securities)}")
+                log(f"{self.getSymbolStrAlias()}: Not found any matched option contracts in added securities: {printSecurities(securities)}.")
                 return None
             else:
-                log(f"{self.getSymbolStrAlias()}: Filtered option contracts in added securities: {printSecurities(securities)}")
+                log(f"{self.getSymbolStrAlias()}: Filtered option contracts in added securities: {printSecurities(securities)}.")
         if self.isDerivative():
             # Sort by expiry to get the closest contract
             securities.sort(key=lambda x: x.expiry)
@@ -649,7 +654,7 @@ class LISecurityMonitor:
 
         # Handle added securities if any!
         if changes.added_securities:
-            log(f"{self.getSymbolStrAlias()}: Added securities: {printSecurities(changes.added_securities)}", self.verbose)
+            log(f"{self.getSymbolStrAlias()}: Added securities: {printSecurities(changes.added_securities)}.", self.verbose)
         addedSecurities = self.getMatchedSecurities(changes.added_securities)
         if len(addedSecurities) == 0:
             return  # Not found any matched securities!
@@ -657,7 +662,7 @@ class LISecurityMonitor:
 
         # Handle removed securities if any!
         if changes.removed_securities:
-            log(f"{self.getSymbolStrAlias()}: Removed securities: {printSecurities(changes.removed_securities)}", self.verbose)
+            log(f"{self.getSymbolStrAlias()}: Removed securities: {printSecurities(changes.removed_securities)}.", self.verbose)
         removedSecurities = self.getMatchedSecurities(changes.removed_securities)
         if len(removedSecurities) == 0:
             return  # Not found any matched securities!
@@ -718,52 +723,54 @@ class LISecurityMonitor:
                     continue
                 securityExpiry = roundDownTime(security.expiry, delta=timedelta(days=1))
                 rolloverDate = roundDownTime(security.expiry - timedelta(self.futureRolloverDays), delta=timedelta(days=1))
-                currentDate = roundDownTime(getAlgo().time, delta=timedelta(days=1))
+                currentDate = roundDownTime(getAlgoTime(), delta=timedelta(days=1))
                 log(f"{self.getSymbolStrAlias()}: securityExpiry={securityExpiry}, rolloverDate={rolloverDate}, currentDate={currentDate}, "
-                    f"isNotInvested={isNotInvested(security.symbol)}", self.verbose)
+                    f"isNotInvested={isNotInvested(security.symbol)}.", self.verbose)
                 if rolloverDate <= currentDate and isNotInvested(security.symbol):
-                    log(f"{self.getSymbolStrAlias()}: Will remove the security expiring in {self.futureRolloverDays} days: {security.symbol.value}")
+                    log(f"{self.getSymbolStrAlias()}: Will remove the security expiring in {self.futureRolloverDays} days: {security.symbol.value}.")
                     self.expiredSecurity = security
                     self.manageExpiredSecurity()
                     continue
             if not thisSecurity:
                 thisSecurity = security
+                log(f"{self.getSymbolStrAlias()}: #1. thisSecurity={printSecurity(thisSecurity)}, nextSecurity={printSecurity(nextSecurity)}.")
             elif not nextSecurity:
                 nextSecurity = security  # Pick the second closed (front month) security
+                log(f"{self.getSymbolStrAlias()}: #2. thisSecurity={printSecurity(thisSecurity)}, nextSecurity={printSecurity(nextSecurity)}.")
             elif thisSecurity.expiry > security.expiry:
                 nextSecurity = thisSecurity  # Reserve as the second closed (front month) security!
                 thisSecurity = security  # Pick the closest (front month) security!
-                log(f"{self.getSymbolStrAlias()}: thisSecurity={thisSecurity.symbol.value}, nextSecurity={nextSecurity.symbol.value}")
+                log(f"{self.getSymbolStrAlias()}: #3. thisSecurity={printSecurity(thisSecurity)}, nextSecurity={printSecurity(nextSecurity)}.")
 
         # Do nothing if thisSecurity is None, Stop Algo only when manual intervene required!
         if thisSecurity is not None:
             self.nextSecurity = nextSecurity  # Save it for daily manageExpiredSecurity.
             if isDerivative(thisSecurity.type):
-                if self.contract is None:
+                if self.contract != thisSecurity:
                     self.contract = thisSecurity
+                    log(f"{self.getSymbolStrAlias()}: #4. contract={printSecurity(self.contract)}, "
+                        f"thisSecurity={printSecurity(thisSecurity)}, "
+                        f"nextSecurity={printSecurity(self.nextSecurity)}.")
                     self.addSecurity(self.contract)
                     log(f"{self.getSymbolStrAlias()}: Use contract: symbol={cleanSymbolValue(thisSecurity.symbol)}, invested={thisSecurity.invested}, "
                         f"price={thisSecurity.price}, volume={thisSecurity.volume}, openInterest={thisSecurity.open_interest}, "
                         f"expiry={thisSecurity.expiry.strftime(LIGlobal.minuteFormat)}, "
                         f"{'strikePrice=' + str(thisSecurity.strike_price) + ', ' if isOption(thisSecurity.type) else ''}"
                         f"{'marketPrice=' + str(thisSecurity.underlying.price) + ', ' if isOption(thisSecurity.type) else ''}"
-                        f"nextSecurity={cleanSymbolValue(nextSecurity.symbol) if nextSecurity else None}")
-                    self.manageExpiredSecurity()
-                else:
-                    self.nextSecurity = thisSecurity  # Save it for when current contract expired
-                    self.manageExpiredSecurity()
+                        f"nextSecurity={cleanSymbolValue(nextSecurity.symbol) if nextSecurity else None}.")
+                self.manageExpiredSecurity()
             else:
                 if self.security and self.security != thisSecurity:
                     self.removeSecurity(self.security)  # Remove expired/existing security first!
                 self.security = thisSecurity
                 self.addSecurity(self.security)
                 log(f"{self.getSymbolStrAlias()}: Use security: symbol={thisSecurity.symbol.value}, invested={thisSecurity.invested}, "
-                    f"price={thisSecurity.price}, volume={thisSecurity.volume}, openInterest={thisSecurity.open_interest}")
+                    f"price={thisSecurity.price}, volume={thisSecurity.volume}, openInterest={thisSecurity.open_interest}.")
 
     def removeSecurities(self, removedSecurities: list[Security]):
         # Log matched security for verification purpose
         if removedSecurities:
-            log(f"{self.getSymbolStrAlias()}: Removing securities: {printSecurities(removedSecurities)}")
+            log(f"{self.getSymbolStrAlias()}: Removing securities: {printSecurities(removedSecurities)}.")
 
         if self.isOption() and self.contract:
             log(f"{self.getSymbolAlias()}: Skipped removing option contract as it should be managed within the strategy!")

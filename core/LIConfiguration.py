@@ -75,6 +75,7 @@ class LIDefault:
     dayTradePerOrderPauseMins = 0  # 0 means no pausing
     stopTradingOnInvalidOrders = 10  # 0 means no stopping
     canTradeAtMarketClosingTime = True
+    forecloseHoldingPositions = None  # [(10, 4500.00), (10, 5000.00)]
     pauseTradingProfitLossHours = None
     liquidateBaselinePrice = None
     liquidateAndStopTrading = False
@@ -109,10 +110,12 @@ class LIDefault:
     candlestickSpinningTopBodyMaxRatio = 0.333
     shortToLongInverseSymbol = None
     macdIndicatorTolerance = 5  # 5 - 10
-    staticTradingSignals = None  # {date(2024, 4, 1): LISignalType.SHORT, date(2024, 4, 29): LISignalType.LONG}
-    fetchTradingSignalsApi = None  # https://www.lifelonginvestor.net/api/signals
+    staticTrendingSignals = None  # {date(2024, 4, 1): LISignalType.SHORT, date(2024, 4, 29): LISignalType.LONG}
+    pullTrendingSignalsApi = None  # https://www.lifelonginvestor.net/api/signals
+    useClosedTrendingSignal = True
     bollingerBandsParams = None  # [(300, 1), (300, 2), (300, 3, LIResolution.HOUR)]
     comboTrendingParams = None  # {"MACD": (12, 26, 5), "RSI": 14, "KDJ": (14, 3, 3), "SRSI": (14, 14, 3, 3)},
+    tradeSpreadsheetUrl = None
     investAmountTierFactors = None  # [4, 3, 2, 1, 1, 2, 3, 4]
     monitorPeriodTierFactors = None  # [1, 2, 3, 6, 12, 12, 12, 12]
     takeProfitAmountTierFactors = None  # [1, 1, 1, 1, 1, 1, 1, 1]
@@ -136,9 +139,11 @@ class LIDefault:
     gridBandingStartPrices = None
     gridBandingOpenFromPrices = None
     gridBandingLimitStartPrices = None
+    gridResetDCABuyAndHold = False
     gridResetLotsMetadata = False
     gridRolloverCriteria = None
     gridInitializeSession = None
+    gridLotMinAmount = None  # Case by case!
     gridLotMinQuantity = None  # Case by case!
     gridLotLevelAmount = None
     gridLotLevelPercent = None
@@ -246,6 +251,7 @@ class LIConfigKey:
     dayTradePerOrderPauseMins = "dayTradePerOrderPauseMins"  # Increase waiting/pausing time exponentially based on dayTradeOrderCount
     stopTradingOnInvalidOrders = "stopTradingOnInvalidOrders"  # Stop trading after reached/exceeded the max number of invalid orders
     canTradeAtMarketClosingTime = "canTradeAtMarketClosingTime"  # Indicate whether allow to trade at market closing time
+    forecloseHoldingPositions = "forecloseHoldingPositions"  # A list of (quantity, targetPrice) tuples to foreclose (manual intervene) some holding positions to take profit or cut loss. e.g. [(10, 4500.00), (10, 5000.00)]
     pauseTradingProfitLossHours = "pauseTradingProfitLossHours"  # Pause trading for specified hours after liquidated and took specified amount of profit or above. e.g. (10_000, 3 * 24)
     liquidateBaselinePrice = "liquidateBaselinePrice"  # Can be used to adjust liquidate amount dynamically: amount = amount * (marketPrice / liquidateBaselinePrice)
     liquidateAndStopTrading = "liquidateAndStopTrading"  # Liquidate this invested security and pause/stop trading for now, wait for next redeploy!
@@ -283,10 +289,12 @@ class LIConfigKey:
     candlestickSpinningTopBodyMaxRatio = "candlestickSpinningTopBodyMaxRatio"  # 0.1=10%, Not Doji, but less than or equals to this percent of average body size
     shortToLongInverseSymbol = "shortToLongInverseSymbol"  # Never short, instead to long inverse symbol
     macdIndicatorTolerance = "macdIndicatorTolerance"  # MACD indicator threshold for histogram or divergence
-    staticTradingSignals = "staticTradingSignals"  # Set static trading signals, {date(2024, 4, 1): LISignalType.SHORT, date(2024, 4, 29): LISignalType.LONG}, defined in indicator/LIWeeklyTrendingSignals.py
-    fetchTradingSignalsApi = "fetchTradingSignalsApi"  # A REST API endpoint to fetch trading signals. e.g. https://www.lifelonginvestor.net/api/signals?symbol=MNQ&page=0&size=20
+    staticTrendingSignals = "staticTrendingSignals"  # Set static trading signals, {date(2024, 4, 1): LISignalType.SHORT, date(2024, 4, 29): LISignalType.LONG}, defined in indicator/LIWeeklyTrendingSignals.py
+    pullTrendingSignalsApi = "pullTrendingSignalsApi"  # A REST API endpoint to pull/fetch trading signals. e.g. https://www.lifelonginvestor.net/api/signals?symbol=MNQ&page=0&size=20
+    useClosedTrendingSignal = "useClosedTrendingSignal"  # Apply the closed trending signal as per standard procedure, otherwise use the unclosed signal to react faster to market changes.
     bollingerBandsParams = "bollingerBandsParams"  # A list of bollinger bands params which can specify the period of moving average, the standard deviation (the distance between middle and upper or lower bands) and resolution (daily by default).
     comboTrendingParams = "comboTrendingParams"  # Specify the params for all supported indicators in map, e.g. {"EMA": 200, "MACD": (12, 26, 5), "RSI": 14, "KDJ": (14, 3, 3), "SRSI": (14, 14, 3, 3)}
+    tradeSpreadsheetUrl = "tradeSpreadsheetUrl"  # A CSV spreadsheet to list trade orders, this spreadsheet could be hosted on Google Sheets or any public web server.
     investAmountTierFactors = "investAmountTierFactors"  # A list of factors for each tier/band, usually equals to bollingerBandsParams * 2 + 1. Trading with different invest amounts as per band.
     monitorPeriodTierFactors = "monitorPeriodTierFactors"  # A list of factors for each tier/band, usually equals to bollingerBandsParams * 2 + 1. Trading with different monitor periods as per band.
     takeProfitAmountTierFactors = "takeProfitAmountTierFactors"  # A list of factors for each tier/band, usually equals to bollingerBandsParams * 2 + 1. Trading with different take profit amount as per band.
@@ -311,9 +319,11 @@ class LIConfigKey:
     gridBandingStartPrices = "gridBandingStartPrices"  # Keep adjusting the fixed start prices dynamically according to bollinger bands indicator, so to follow the market trend closely on some loss.
     gridBandingOpenFromPrices = "gridBandingOpenFromPrices"  # Start opening lot's positions from the specified band's price, so that we can wait patiently for market to reach a certain price before long or short.
     gridBandingLimitStartPrices = "gridBandingLimitStartPrices"  # Adjust the limit/capped start prices as per specified bollinger bands. Also refer to gridLimitStartPrices. e.g. {LIGridSide.BTD: "band-#2-lower", LIGridSide.STU: "band-#2-upper"}
+    gridResetDCABuyAndHold = "gridResetDCABuyAndHold"  # Reset DCA Buy and Hold strategy by resetting start prices and invested quantity and start over with current session.
     gridResetLotsMetadata = "gridResetLotsMetadata"  # Simply remove <Prefix>/gridLotsMetadata (could be skewed) in order to start over with current session and reset filled open prices and positions.
     gridRolloverCriteria = "gridRolloverCriteria"  # Algo could fail to figure out the rollover criteria, It's to specify contract, how many grid lots, invested quantity, profit loss to rollover. (e.g. (MNQ21H25, 3, 3 * 2, -10000))
     gridInitializeSession = "gridInitializeSession"  # Need to deploy twice for live mode! first to initialize a new session, liquidate open positions, delete metadata and reset all grid lots, then remove it and redeploy to continue!
+    gridLotMinAmount = "gridLotMinAmount"  # This is required for LIInvestAmount(maxHolding=?) so that we can avoid submitting small size of orders!
     gridLotMinQuantity = "gridLotMinQuantity"  # This is required for LIInvestAmount(maxHolding=?) so that we can avoid submitting small size of orders!
     gridLotLevelAmount = "gridLotLevelAmount"  # Calculate Arithmetic open price for each grid lot
     gridLotLevelPercent = "gridLotLevelPercent"  # Calculate Geometric open price for each grid lot

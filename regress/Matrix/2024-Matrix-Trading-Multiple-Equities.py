@@ -29,7 +29,9 @@ class LifelongInvestorMain(LIAlgorithm):
             LIConfigKey.extendedMarketHours: True,
             LIConfigKey.extendDataBarStream: True,
             LIConfigKey.gridLongLots: 10,
-            LIConfigKey.gridShortLots: 10,
+            LIConfigKey.gridLotMinAmount: 100,
+            LIConfigKey.gridMaintainOpenOrders: 3,
+            LIConfigKey.tradeSpreadsheetUrl: "https://docs.google.com/spreadsheets/d/1b4rwApU3ggHpeCGZuBP_aWpCVwynsdV65tf_feT2uNk/export?format=csv",
             LIConfigKey.gridInitializeSession: True,
         }
 
@@ -41,24 +43,24 @@ class LifelongInvestorMain(LIAlgorithm):
 ┌────────────────────────────┬───────────────────┬─────────────────────────────┬─────────────┐
 │ Statistic                  │ Value             │ Statistic                   │ Value       │
 ├────────────────────────────┼───────────────────┼─────────────────────────────┼─────────────┤
-│ Equity                     │ $998,847.73       │ Fees                        │ -$53.38     │
-│ Holdings                   │ $629,585.13       │ Net Profit                  │ $-53.38     │
-│ Probabilistic Sharpe Ratio │ 41.308%           │ Return                      │ -0.12 %     │
-│ Unrealized                 │ $-1,152.27        │ Volume                      │ $630,684.02 │
+│ Equity                     │ $1,003,594.43     │ Fees                        │ -$72.83     │
+│ Holdings                   │ $602,641.63       │ Net Profit                  │ $-146.15    │
+│ Probabilistic Sharpe Ratio │ 50.197%           │ Return                      │ 0.36 %      │
+│ Unrealized                 │ $3,693.10         │ Volume                      │ $730,510.46 │
 ├────────────────────────────┼───────────────────┼─────────────────────────────┼─────────────┤
-│ Total Orders               │ 7                 │ Average Win                 │ 0%          │
-│ Average Loss               │ 0%                │ Compounding Annual Return   │ -4.189%     │
-│ Drawdown                   │ 2.300%            │ Expectancy                  │ 0           │
-│ Start Equity               │ 1000000           │ End Equity                  │ 998847.73   │
-│ Net Profit                 │ -0.115%           │ Sharpe Ratio                │ -0.722      │
-│ Sortino Ratio              │ -1.186            │ Probabilistic Sharpe Ratio  │ 41.308%     │
-│ Loss Rate                  │ 0%                │ Win Rate                    │ 0%          │
+│ Total Orders               │ 12                │ Average Win                 │ 0%          │
+│ Average Loss               │ -0.01%            │ Compounding Annual Return   │ 14.246%     │
+│ Drawdown                   │ 2.000%            │ Expectancy                  │ -1          │
+│ Start Equity               │ 1000000           │ End Equity                  │ 1003594.42  │
+│ Net Profit                 │ 0.359%            │ Sharpe Ratio                │ 0.546       │
+│ Sortino Ratio              │ 0.951             │ Probabilistic Sharpe Ratio  │ 50.197%     │
+│ Loss Rate                  │ 100%              │ Win Rate                    │ 0%          │
 │ Profit-Loss Ratio          │ 0                 │ Alpha                       │ 0           │
-│ Beta                       │ 0                 │ Annual Standard Deviation   │ 0.113       │
-│ Annual Variance            │ 0.013             │ Information Ratio           │ -0.234      │
-│ Tracking Error             │ 0.113             │ Treynor Ratio               │ 0           │
-│ Total Fees                 │ $53.38            │ Estimated Strategy Capacity │ $6600000.00 │
-│ Lowest Capacity Asset      │ UPST XKEDQOEEEPUT │ Portfolio Turnover          │ 6.35%       │
+│ Beta                       │ 0                 │ Annual Standard Deviation   │ 0.102       │
+│ Annual Variance            │ 0.01              │ Information Ratio           │ 1.083       │
+│ Tracking Error             │ 0.102             │ Treynor Ratio               │ 0           │
+│ Total Fees                 │ $72.83            │ Estimated Strategy Capacity │ $9600000.00 │
+│ Lowest Capacity Asset      │ UPST XKEDQOEEEPUT │ Portfolio Turnover          │ 7.34%       │
 │ Drawdown Recovery          │ 3                 │                             │             │
 └────────────────────────────┴───────────────────┴─────────────────────────────┴─────────────┘
 """

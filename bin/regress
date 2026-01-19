@@ -37,9 +37,9 @@ CONFIG_FILE=config.json
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 REGRESS_DIR=$(dirname "${SCRIPT_DIR}")/regress
-LIVE_DIR=$(dirname "${SCRIPT_DIR}")/live
+ACCOUNTS_DIR=$(dirname "${SCRIPT_DIR}")/accounts
 PROJECT_DIR=$(dirname "${REGRESS_DIR}")
-ACCOUNT_CONFIG="${LIVE_DIR}"/${ACCOUNT}
+ACCOUNT_CONFIG="${ACCOUNTS_DIR}"/${ACCOUNT}
 ACCOUNT_PROJECT="$(dirname "${PROJECT_DIR}")"/${ACCOUNT}
 REPORT_FILE="${REGRESS_DIR}"/report.txt
 
@@ -60,7 +60,7 @@ fi
 # Go back to lean home dir
 cd "${PROJECT_DIR}"/.. || exit
 
-# Sync to live project dir
+# Sync to accounts project dir
 rsync -a --delete --exclude-from="${PROJECT_DIR}"/.leanignore "${PROJECT_DIR}"/ "${ACCOUNT_PROJECT}"/
 
 # Copy over main/config files
@@ -69,7 +69,7 @@ cp "${ACCOUNT_CONFIG}"/${CONFIG_FILE} "${ACCOUNT_PROJECT}"/${CONFIG_FILE}
 
 
 keywords=()
-keywords+=("│ Return                      │")
+keywords+=("│ Return                     │")
 keywords+=("│ Unrealized                 │")
 keywords+=("│ Total Orders               │")
 keywords+=("│ Drawdown                   │")
