@@ -92,7 +92,9 @@ class LIGridTradingLot(LIGridBaseLot):
             return False
 
         if self.gridTrailingOpenPriceFactor:
-            trailingOpenPrice = self.getTrailingOpenPrice(marketPrice=marketPrice)
+            trailingOpenPrice = targetPrice
+            if not self.gridTrailingOpenPriceForLong or self.isLongLot():
+                trailingOpenPrice = self.getTrailingOpenPrice(marketPrice=marketPrice)
             newTargetPrice = None
             if self.isMomentumMode():
                 if self.isLongLot():
@@ -331,7 +333,7 @@ class LIGridTradingLot(LIGridBaseLot):
 
         # manualCloseOrder = self.gridTrading.detectManualCloseOrder(self)
         # if manualCloseOrder:
-        #     alert(f"{self.getNotifyPrefix()}: Skip submitting close order ticket as detected a manual close order: {orderTicket}")
+        #     alert(f"{self.getNotifyPrefix()}: Skip submitting close order ticket as detected a manual close order: orderStatus={orderTicket.status}, {orderTicket}")
         #     return False
 
         if targetPrice <= 0:  # Important!

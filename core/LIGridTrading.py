@@ -444,8 +444,8 @@ class LIGridTrading(LIGridBase):
             targetPrice = criteria[1]
             if (investedQuantity >= quantity > 0 and marketPrice < targetPrice) or (investedQuantity <= -quantity < 0 and marketPrice > targetPrice):
                 quantity = -quantity if investedQuantity > 0 else quantity
-                tagLog = f"{self.gridMode}: Foreclose {LITradeType.CLOSING_LIMIT} order, quantity={quantity}, targetPrice={targetPrice}, marketPrice={marketPrice}."
-                log(f"{self.getSymbolAlias()}@{tagLog}")
+                tagLog = f"Foreclose {LITradeType.CLOSING_LIMIT} order, quantity={quantity}, targetPrice={targetPrice}, marketPrice={marketPrice}."
+                log(f"{self.getSymbolAlias()}: {tagLog}")
                 self.closeOrderTicket = self.positionManager.limitOrder(quantity, targetPrice, tagLog)
                 return True  # Had created a foreclosing order!
 
@@ -471,6 +471,7 @@ class LIGridTrading(LIGridBase):
         unrealizedProfitPercent = self.getUnrealizedProfitPercent()
         tagLog = f"{LITradeType.LIQUIDATE} grid trading session#{self.sessionId} as {reason}."
         liquidatedPrice = liquidateSecurity(self.positionManager.getSecurity(), tagLog)
+        liquidatedPrice = self.positionManager.roundSecurityPrice(liquidatedPrice) if liquidatedPrice else None
         if self.getInvestedQuantity() != 0:
             alert(f"{self.getNotifyPrefix()}: Failed to liquidate security, waiting for next cycle!")
             return False
@@ -538,6 +539,7 @@ class LIGridTrading(LIGridBase):
         self.storeGridMetadata()
         tagLog = f"{LITradeType.LIQUIDATE} grid trading security {security.Symbol.Value} as {reason}."
         liquidatedPrice = liquidateSecurity(security, tagLog)
+        liquidatedPrice = self.positionManager.roundSecurityPrice(liquidatedPrice) if liquidatedPrice else None
         if self.getInvestedQuantity() != 0:
             alert(f"{self.getNotifyPrefix()}: Failed to liquidate security, waiting for next cycle!")
             return False
@@ -882,8 +884,8 @@ class LIGridTrading(LIGridBase):
             if self.openWithMarketOrderType:
                 tradeType = LITradeType.OPENING_LIMIT_MARKET if self.positionManager.enableLimitMarketOrder else LITradeType.OPENING_MARKET
 
-            tagLog = f"{self.gridMode}: Submit {tradeType} order at targetQuantity={targetQuantity}, marketPrice={self.getMarketPrice()}."
-            log(f"{self.getSymbolAlias()}@{tagLog}")
+            tagLog = f"Submit {tradeType} order at targetQuantity={targetQuantity}, marketPrice={self.getMarketPrice()}."
+            log(f"{self.getSymbolAlias()}: {tagLog}")
             if self.openWithMarketOrderType:
                 self.openOrderTicket = self.positionManager.limitMarketOrder(targetQuantity, tagLog)
             else:
@@ -982,9 +984,9 @@ class LIGridTrading(LIGridBase):
             stopPricesMsg = f"trailingStopPrices={printTrailingStopPrices(trailingStopPrices, False)}"
             if self.closeOrderTicket is None:
                 self.closeOrderUpdatedTimes = 0
-                tagLog = (f"{self.gridMode}: Submit {tradeType} order, targetQuantity={targetQuantity}, "
+                tagLog = (f"Submit {tradeType} order, targetQuantity={targetQuantity}, "
                           f"marketPrice={marketPrice}, averagePrice={averagePrice}, {stopPricesMsg}, {stopProfitLevelMsg}.")
-                log(f"{self.getSymbolAlias()}@{tagLog}")
+                log(f"{self.getSymbolAlias()}: {tagLog}")
                 self.closeOrderTicket = self.positionManager.trailingStopOrder(targetQuantity, trailingStopPrices[0], trailingStopPrices[1],
                                                                                trailingStopPrices[2], tagLog)
             elif isOrderTicketUpdatable(self.closeOrderTicket):
@@ -1001,9 +1003,9 @@ class LIGridTrading(LIGridBase):
                         needToUpdate = True
                 if needToUpdate:
                     self.closeOrderUpdatedTimes += 1
-                    tagLog = (f"{self.gridMode}: Update {tradeType} order @{self.closeOrderUpdatedTimes}, targetQuantity={targetQuantity}, "
+                    tagLog = (f"Update {tradeType} order @{self.closeOrderUpdatedTimes}, targetQuantity={targetQuantity}, "
                               f"marketPrice={marketPrice}, averagePrice={averagePrice}, {stopPricesMsg}, {stopProfitLevelMsg}.")
-                    log(f"{self.getSymbolAlias()}@{tagLog}", self.verbose)
+                    log(f"{self.getSymbolAlias()}: {tagLog}", self.verbose)
                     updateFields.tag = decorateTag(tagLog)
                     orderResponse = self.closeOrderTicket.update(updateFields)
                     if orderResponse and orderResponse.is_error:
@@ -1015,9 +1017,9 @@ class LIGridTrading(LIGridBase):
             if self.closeOrderTicket.get(OrderField.LIMIT_PRICE) != marketPrice:
                 self.closeOrderUpdatedTimes += 1
                 updateFields = UpdateOrderFields()
-                tagLog = (f"{self.gridMode}: Update {tradeType} order @{self.closeOrderUpdatedTimes}, targetQuantity={targetQuantity}, "
+                tagLog = (f"Update {tradeType} order @{self.closeOrderUpdatedTimes}, targetQuantity={targetQuantity}, "
                           f"marketPrice={marketPrice}, averagePrice={averagePrice}, {stopProfitLevelMsg}.")
-                log(f"{self.getSymbolAlias()}@{tagLog}", self.verbose)
+                log(f"{self.getSymbolAlias()}: {tagLog}", self.verbose)
                 updateFields.limit_price = marketPrice
                 updateFields.tag = decorateTag(tagLog)
                 orderResponse = self.closeOrderTicket.update(updateFields)
@@ -1029,9 +1031,9 @@ class LIGridTrading(LIGridBase):
             if (closePositionsNow or
                     (investedQuantity > 0 and self.trailingStopPrice >= marketPrice) or
                     (investedQuantity < 0 and self.trailingStopPrice <= marketPrice)):
-                tagLog = (f"{self.gridMode}: Submit {tradeType} order, targetQuantity={targetQuantity}, marketPrice={marketPrice}, "
+                tagLog = (f"Submit {tradeType} order, targetQuantity={targetQuantity}, marketPrice={marketPrice}, "
                           f"averagePrice={averagePrice}, trailingStopPrice={self.trailingStopPrice}, {stopProfitLevelMsg}.")
-                log(f"{self.getSymbolAlias()}@{tagLog}")
+                log(f"{self.getSymbolAlias()}: {tagLog}")
                 # self.closeOrderTicket = self.limitOrder(targetQuantity, softLimitPrice, tagLog)
                 # TEST: It performs better with limit market order than stop limit order at this point!
                 if self.closeWithMarketOrderType:

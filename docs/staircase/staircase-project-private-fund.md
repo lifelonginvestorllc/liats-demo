@@ -70,6 +70,10 @@
 
 <img src="6E-1Year-Bands-Tiers.png" alt="Define Bands and Tiers" width="1200"/>
 
+### 平滑后的周线趋势信号
+
+<img src="MNQ-1Year-Weekly-Trending.png" alt="Heikin Ashi Weekly Trending Signals" width="1200"/>
+
 ## LIATS系统架构
 
 ### LIATS项目代码结构
@@ -88,6 +92,7 @@ liats/
 │   └── YanhuaInvest/
 │       ├── config.json
 │       └── main.py
+│   └── ...
 ├── core/
 │   ├── LIAlgorithm.py
 │   ├── LICommon.py

@@ -69,7 +69,6 @@ class LifelongInvestorMain(LIAlgorithm):
             # LIConfigKey.candlestickBodyTolerance: 0.5,
             # LIConfigKey.staticTrendingSignals: weeklyTrendingSignals[Futures.Indices.MICRO_NASDAQ_100_E_MINI],
             LIConfigKey.pullTrendingSignalsApi: "api/signals",
-            # LIConfigKey.pullTrendingSignalsApi: "api/signals",
             # LIConfigKey.useClosedTrendingSignal: False,
             LIConfigKey.gridInitializeSession: True,  # Be careful!
         }

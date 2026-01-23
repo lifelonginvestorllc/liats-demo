@@ -832,12 +832,12 @@ class LIGridBase(LITrading):
     def cancelExpiredCloseOrder(self):
         if self.closeOrderTicket and abs(self.closeOrderTicket.quantity) > abs(self.getInvestedQuantity()):
             if isOrderTicketUpdatable(self.closeOrderTicket):
-                tagLog = f"{self.gridMode}: Cancel {LITradeType.CLOSING} order as not holding enough positions! tag=[{self.closeOrderTicket.tag}]."
+                tagLog = f"Cancel {LITradeType.CLOSING} order as not holding enough positions! tag=[{self.closeOrderTicket.tag}]."
                 if self.positionManager.cancelOrder(self.closeOrderTicket, tagLog):
                     self.closeOrderTicket = None
                     self.trailingStopPrice = None
                     self.closeOrderUpdatedTimes = 0
-                    log(f"{self.getSymbolAlias()}@{tagLog}")
+                    log(f"{self.getSymbolAlias()}: {tagLog}")
                     return True
         return False
 

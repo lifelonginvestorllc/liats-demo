@@ -25,18 +25,10 @@ class LIDefault:
     marketBias = LIMarketBias.NEUTRAL
     monitorPeriod = (5, LIResolution.MINUTE)
     indicatorPeriod = (1, LIResolution.HOUR)
-    # Trading indicator
-    signalPeriod = 9
-    fastEMAPeriod = 13
-    slowEMAPeriod = 47  # 26
-    longEMAPeriod = 147
-    dailyEMAPeriod = 21
-    auxRSIPeriod = 13
     heikinAshiPlies = None
     skipWeekendDays = False
     addVolumeSeries = False
     plotDefaultChart = True
-    isVolatilePeriod = False
     signalSymbolStr = None
     signalSecurityType = None
     enableAutoRollover = True
@@ -103,12 +95,9 @@ class LIDefault:
     enableLimitMarketOrder = False
     limitMarketOrderRetryTimes = 2
     dayOpenGapUpDownPercent = 4
-    scalpingWindowStartTime = "09:34"
-    scalpingWindowStopTime = "10:11"
     candlestickBodyTolerance = 0.01
     candlestickDojiBodyMaxRatio = 0.0666
     candlestickSpinningTopBodyMaxRatio = 0.333
-    shortToLongInverseSymbol = None
     macdIndicatorTolerance = 5  # 5 - 10
     staticTrendingSignals = None  # {date(2024, 4, 1): LISignalType.SHORT, date(2024, 4, 29): LISignalType.LONG}
     pullTrendingSignalsApi = None  # https://www.lifelonginvestor.net/api/signals
@@ -162,7 +151,6 @@ class LIDefault:
     gridRestartIfAllLotsPaused = False
     gridInitOpenedLots = 0  # Disabled
     gridRetainOpenedLots = 0  # Disabled
-    gridTradeRetainedLots = False
     gridNoMoreOpenOrders = False
     gridNoMoreCloseOrders = False
     gridMaintainOpenOrders = 1
@@ -183,6 +171,7 @@ class LIDefault:
     gridPriceInStopProfitFactor = False
     gridCancelOrdersAfterClosed = False
     gridTrailingOpenPriceFactor = None
+    gridTrailingOpenPriceForLong = False
     gridBoostingKeepTrading = False
     gridBoostingTriggerAmount = None
     gridBoostingTriggerPercent = None
@@ -202,17 +191,10 @@ class LIConfigKey:
     marketBias = "marketBias"  # Forecast market bias to drive indicator
     monitorPeriod = "monitorPeriod"  # The minimum span of time before emitting a consolidated bar
     indicatorPeriod = "indicatorPeriod"  # The minimum span of time before emitting a consolidated bar
-    auxRSIPeriod = "auxRSIPeriod"  # Auxiliary RSI (Relative Strength Index) period
-    signalPeriod = "signalPeriod"  # Signal smoothing for a MACD line
-    fastEMAPeriod = "fastEMAPeriod"  # Fast EMA period for an indicator
-    slowEMAPeriod = "slowEMAPeriod"  # Slow EMA period for an indicator
-    longEMAPeriod = "longEMAPeriod"  # Long EMA Period for an indicator
-    dailyEMAPeriod = "dailyEMAPeriod"  # Daily EMA period for a daily indicator
     heikinAshiPlies = "heikinAshiPlies"  # Use Heikin-Ashi with specific plies to smooth candlestick first (>=1)
     skipWeekendDays = "skipWeekendDays"  # Whether to skip weekend days (Saturday or Sunday) in indicator calculation
     addVolumeSeries = "addVolumeSeries"  # Whether to add Volume bar at the bottom of the indicator chart
     plotDefaultChart = "plotDefaultChart"  # Whether to plot the default chart with market/order prices
-    isVolatilePeriod = "isVolatilePeriod"  # Whether the signal symbol is in a high volatile period, e.g. 3x Leveraged ETF
     signalSymbolStr = "signalSymbolStr"  # Alternative signal symbol's string to populate the indicator
     signalSecurityType = "signalSecurityType"  # Alternative signal symbol's security type for the indicator
     enableAutoRollover = "enableAutoRollover"  # Rollover metadata and holdings (with market order) for this removed/expired contract to next one
@@ -280,14 +262,11 @@ class LIConfigKey:
     limitMarketOrderRetryTimes = "limitMarketOrderRetryTimes"  # 0 means no retry, but will still submit first limit order
     disableBuyingPowerModel = "disableBuyingPowerModel"  # Disable validations of default buying power model, skip checking order margin!
     dayOpenGapUpDownPercent = "dayOpenGapUpDownPercent"  # Market open gap percent, positive for up and negative for down (e.g. 2.5=2.5%)
-    scalpingWindowStartTime = "scalpingWindowStartTime"  # Doing scalping strategy within this time window
-    scalpingWindowStopTime = "scalpingWindowStopTime"  # Doing scalping strategy within this time window
     candlestickAvgBodySize = "candlestickAvgBodySize"  # Calculate dynamically if not specified
     candlestickAvgWickSize = "candlestickAvgWickSize"  # Calculate dynamically if not specified
     candlestickBodyTolerance = "candlestickBodyTolerance"  # Minimum body size to consider as valid body
     candlestickDojiBodyMaxRatio = "candlestickDojiBodyMaxRatio"  # 0.01=1%, Less than or equals to this percent of average body size
     candlestickSpinningTopBodyMaxRatio = "candlestickSpinningTopBodyMaxRatio"  # 0.1=10%, Not Doji, but less than or equals to this percent of average body size
-    shortToLongInverseSymbol = "shortToLongInverseSymbol"  # Never short, instead to long inverse symbol
     macdIndicatorTolerance = "macdIndicatorTolerance"  # MACD indicator threshold for histogram or divergence
     staticTrendingSignals = "staticTrendingSignals"  # Set static trading signals, {date(2024, 4, 1): LISignalType.SHORT, date(2024, 4, 29): LISignalType.LONG}, defined in indicator/LIWeeklyTrendingSignals.py
     pullTrendingSignalsApi = "pullTrendingSignalsApi"  # A REST API endpoint to pull/fetch trading signals. e.g. https://www.lifelonginvestor.net/api/signals?symbol=MNQ&page=0&size=20
@@ -344,7 +323,6 @@ class LIConfigKey:
     gridStickToMarketTrend = "gridStickToMarketTrend"  # Have grid trading lots stick to or align with current market price, always follow the market trend closely in favor of more orders to be filled/executed.
     gridInitOpenedLots = "gridInitOpenedLots"  # Adjust start prices dynamically to initiate certain long(positive)/short(negative) filled/opened positions at the beginning and continue the normal trading behavior
     gridRetainOpenedLots = "gridRetainOpenedLots"  # Adjust start prices dynamically to retain certain long(positive)/short(negative) filled/opened positions all the time until been reset to normal behavior
-    gridTradeRetainedLots = "gridTradeRetainedLots"  # Set as false to avoid trading retained open lots in favor of reducing trades
     gridNoMoreOpenOrders = "gridNoMoreOpenOrders"  # No more open orders, use this flag to close all open positions and stop trading on this security!
     gridNoMoreCloseOrders = "gridNoMoreCloseOrders"  # No more close orders, use this flag to stop placing close orders on this security!
     gridKeepOpenOrdersApart = "gridKeepOpenOrdersApart"  # Avoid filling multiple open orders with almost the same prices during a big swing market
@@ -363,6 +341,7 @@ class LIConfigKey:
     gridPriceInStopProfitFactor = "gridPriceInStopProfitFactor"  # Adjust stop profit factor based on the distance between market price and start price, the bigger distance the bigger factor for contrarian mode, opposite for momentum mode, but still within gridLotStopProfitFactors!
     gridCancelOrdersAfterClosed = "gridCancelOrdersAfterClosed"  # Cancel open orders right after closed a lot in favor of filling back open orders/positions sooner/easier in contrarian mode.
     gridTrailingOpenPriceFactor = "gridTrailingOpenPriceFactor"  # Limit the lot's open price distance from market price in favor of filling back open orders/positions sooner/easier in contrarian mode, could be very aggressive if set to a smaller factor.
+    gridTrailingOpenPriceForLong = "gridTrailingOpenPriceForLong"  # Limit the long lot's open price distance from market price in favor of filling back open orders/positions sooner/easier in contrarian mode, could be very aggressive if set to a smaller factor.
     gridBoostingKeepTrading = "gridBoostingKeepTrading"  # Do not stop trading after triggered the stop profit criteria and liquidated all positions
     gridBoostingTriggerAmount = "gridBoostingTriggerAmount"  # Acquire more positions once reached this profit amount and hold until trigger trailing stop profit, longSideAmount = marketPrice - avgFilledPrice, shortSideAmount = avgFilledPrice - marketPrice
     gridBoostingTriggerPercent = "gridBoostingTriggerPercent"  # Acquire more positions once reached this profit percent and hold until trigger trailing stop profit, percent = aboveAmount / marketPrice * 100

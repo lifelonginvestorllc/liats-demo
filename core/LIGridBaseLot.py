@@ -39,6 +39,7 @@ class LIGridBaseLot(LITradingLot):
         self.gridPriceInStopProfitFactor = configs.get(LIConfigKey.gridPriceInStopProfitFactor, LIDefault.gridPriceInStopProfitFactor)
         self.gridCancelOrdersAfterClosed = configs.get(LIConfigKey.gridCancelOrdersAfterClosed, LIDefault.gridCancelOrdersAfterClosed)
         self.gridTrailingOpenPriceFactor = configs.get(LIConfigKey.gridTrailingOpenPriceFactor, LIDefault.gridTrailingOpenPriceFactor)
+        self.gridTrailingOpenPriceForLong = configs.get(LIConfigKey.gridTrailingOpenPriceForLong, LIDefault.gridTrailingOpenPriceForLong)
 
         self.gridLotOpenUponTradeInsight = configs.get(LIConfigKey.gridLotOpenUponTradeInsight, LIDefault.gridLotOpenUponTradeInsight)
         self.gridLotCloseUponTradeInsight = configs.get(LIConfigKey.gridLotCloseUponTradeInsight, LIDefault.gridLotCloseUponTradeInsight)
@@ -50,6 +51,8 @@ class LIGridBaseLot(LITradingLot):
                 terminate(f"{LIConfigKey.gridLotBoostingProfitFactor} is not applicable for {self.getGridMode()} mode.")
             if self.gridTrailingOpenPriceFactor:
                 terminate(f"Please note {LIConfigKey.gridTrailingOpenPriceFactor} can only apply to {LIGridMode.CONTRARIAN}!")
+            if self.gridTrailingOpenPriceForLong:
+                terminate(f"Please note {LIConfigKey.gridTrailingOpenPriceForLong} can only apply to {LIGridMode.CONTRARIAN}!")
         elif self.isContrarianMode():
             if self.openWithStopOrderType:
                 terminate(f"{LIConfigKey.openWithStopOrderType} is not applicable for {self.getGridMode()} mode.")
